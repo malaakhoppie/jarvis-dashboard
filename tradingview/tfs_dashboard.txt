@@ -1,0 +1,277 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// MR. CASINO — TFS ESTABLISHED DIRECTION DASHBOARD
+//
+// Shows last confirmed FU direction for EVERY TF within each tier.
+// Direction stays established until same-TF manipulation negates it.
+//
+// Hierarchy:
+//   Long Term  4D  → 11hr
+//   Swing      11hr → 3hr
+//   Intraday   3hr → 30m
+//   Scalp      30m → 7m
+//   LTF        7m  → 1m
+// ═══════════════════════════════════════════════════════════════════════════
+//@version=5
+indicator("MrCasino — TFS Established Direction", overlay=true)
+
+// ─── INPUTS ─────────────────────────────────────────────────────────────────
+i_body = input.float(0.55, "FU Body Ratio",
+     minval=0.3, maxval=0.9, step=0.05,
+     tooltip="Min body/range ratio for a candle to qualify as FU.")
+i_pos = input.string("Top Right", "Table Position",
+     options=["Top Right","Top Left","Bottom Right","Bottom Left"])
+tPos  = i_pos == "Top Right"    ? position.top_right    :
+        i_pos == "Top Left"     ? position.top_left     :
+        i_pos == "Bottom Right" ? position.bottom_right :
+                                  position.bottom_left
+
+// ─── MULTI-TF DATA ───────────────────────────────────────────────────────────
+// Each request returns: open, high, low, close, prev_high, prev_low
+
+// LONG TERM (4D → 11hr): 4D, 3D, 2D, 1D
+[o4D, h4D, l4D, c4D, ph4D, pl4D]    = request.security(syminfo.tickerid,"4D", [open,high,low,close,high[1],low[1]], lookahead=barmerge.lookahead_off)
+[o3D, h3D, l3D, c3D, ph3D, pl3D]    = request.security(syminfo.tickerid,"3D", [open,high,low,close,high[1],low[1]], lookahead=barmerge.lookahead_off)
+[o2D, h2D, l2D, c2D, ph2D, pl2D]    = request.security(syminfo.tickerid,"2D", [open,high,low,close,high[1],low[1]], lookahead=barmerge.lookahead_off)
+[o1D, h1D, l1D, c1D, ph1D, pl1D]    = request.security(syminfo.tickerid,"1D", [open,high,low,close,high[1],low[1]], lookahead=barmerge.lookahead_off)
+
+// SWING (11hr → 3hr): 11hr, 7hr, 5hr, 4hr, 3hr
+[o11h,h11h,l11h,c11h,ph11h,pl11h]   = request.security(syminfo.tickerid,"660",[open,high,low,close,high[1],low[1]], lookahead=barmerge.lookahead_off)
+[o7h, h7h, l7h, c7h, ph7h, pl7h]    = request.security(syminfo.tickerid,"420",[open,high,low,close,high[1],low[1]], lookahead=barmerge.lookahead_off)
+[o5h, h5h, l5h, c5h, ph5h, pl5h]    = request.security(syminfo.tickerid,"300",[open,high,low,close,high[1],low[1]], lookahead=barmerge.lookahead_off)
+[o4h, h4h, l4h, c4h, ph4h, pl4h]    = request.security(syminfo.tickerid,"240",[open,high,low,close,high[1],low[1]], lookahead=barmerge.lookahead_off)
+[o3h, h3h, l3h, c3h, ph3h, pl3h]    = request.security(syminfo.tickerid,"180",[open,high,low,close,high[1],low[1]], lookahead=barmerge.lookahead_off)
+
+// INTRADAY (3hr → 30m): 2hr, 1hr, 45m, 30m
+[o2h, h2h, l2h, c2h, ph2h, pl2h]    = request.security(syminfo.tickerid,"120",[open,high,low,close,high[1],low[1]], lookahead=barmerge.lookahead_off)
+[o1h, h1h, l1h, c1h, ph1h, pl1h]    = request.security(syminfo.tickerid,"60", [open,high,low,close,high[1],low[1]], lookahead=barmerge.lookahead_off)
+[o45m,h45m,l45m,c45m,ph45m,pl45m]   = request.security(syminfo.tickerid,"45", [open,high,low,close,high[1],low[1]], lookahead=barmerge.lookahead_off)
+[o30m,h30m,l30m,c30m,ph30m,pl30m]   = request.security(syminfo.tickerid,"30", [open,high,low,close,high[1],low[1]], lookahead=barmerge.lookahead_off)
+
+// SCALP (30m → 7m): 20m, 15m, 10m, 7m
+[o20m,h20m,l20m,c20m,ph20m,pl20m]   = request.security(syminfo.tickerid,"20", [open,high,low,close,high[1],low[1]], lookahead=barmerge.lookahead_off)
+[o15m,h15m,l15m,c15m,ph15m,pl15m]   = request.security(syminfo.tickerid,"15", [open,high,low,close,high[1],low[1]], lookahead=barmerge.lookahead_off)
+[o10m,h10m,l10m,c10m,ph10m,pl10m]   = request.security(syminfo.tickerid,"10", [open,high,low,close,high[1],low[1]], lookahead=barmerge.lookahead_off)
+[o7m, h7m, l7m, c7m, ph7m, pl7m]    = request.security(syminfo.tickerid,"7",  [open,high,low,close,high[1],low[1]], lookahead=barmerge.lookahead_off)
+
+// LTF (7m → 1m): 5m, 3m, 2m, 1m
+[o5m, h5m, l5m, c5m, ph5m, pl5m]    = request.security(syminfo.tickerid,"5",  [open,high,low,close,high[1],low[1]], lookahead=barmerge.lookahead_off)
+[o3m, h3m, l3m, c3m, ph3m, pl3m]    = request.security(syminfo.tickerid,"3",  [open,high,low,close,high[1],low[1]], lookahead=barmerge.lookahead_off)
+[o2m, h2m, l2m, c2m, ph2m, pl2m]    = request.security(syminfo.tickerid,"2",  [open,high,low,close,high[1],low[1]], lookahead=barmerge.lookahead_off)
+[o1m, h1m, l1m, c1m, ph1m, pl1m]    = request.security(syminfo.tickerid,"1",  [open,high,low,close,high[1],low[1]], lookahead=barmerge.lookahead_off)
+
+// ─── ESTABLISHED DIRECTION ───────────────────────────────────────────────────
+// Returns 1 (bull) or -1 (bear). Holds last confirmed FU. Flips on opposite FU.
+
+fuDir(o, h, l, c, ph, pl) =>
+    rng  = h - l
+    body = math.abs(c - o)
+    r    = rng > 0 ? body / rng : 0.0
+    bull = l < pl and c > o and r >= i_body
+    bear = h > ph and c < o and r >= i_body
+    var int dir = 0
+    if bull
+        dir := 1
+    if bear
+        dir := -1
+    dir
+
+// Long Term
+d4D  = fuDir(o4D, h4D, l4D, c4D, ph4D, pl4D)
+d3D  = fuDir(o3D, h3D, l3D, c3D, ph3D, pl3D)
+d2D  = fuDir(o2D, h2D, l2D, c2D, ph2D, pl2D)
+d1D  = fuDir(o1D, h1D, l1D, c1D, ph1D, pl1D)
+
+// Swing
+d11h = fuDir(o11h,h11h,l11h,c11h,ph11h,pl11h)
+d7h  = fuDir(o7h, h7h, l7h, c7h, ph7h, pl7h)
+d5h  = fuDir(o5h, h5h, l5h, c5h, ph5h, pl5h)
+d4h  = fuDir(o4h, h4h, l4h, c4h, ph4h, pl4h)
+d3h  = fuDir(o3h, h3h, l3h, c3h, ph3h, pl3h)
+
+// Intraday
+d2h  = fuDir(o2h, h2h, l2h, c2h, ph2h, pl2h)
+d1h  = fuDir(o1h, h1h, l1h, c1h, ph1h, pl1h)
+d45m = fuDir(o45m,h45m,l45m,c45m,ph45m,pl45m)
+d30m = fuDir(o30m,h30m,l30m,c30m,ph30m,pl30m)
+
+// Scalp
+d20m = fuDir(o20m,h20m,l20m,c20m,ph20m,pl20m)
+d15m = fuDir(o15m,h15m,l15m,c15m,ph15m,pl15m)
+d10m = fuDir(o10m,h10m,l10m,c10m,ph10m,pl10m)
+d7m  = fuDir(o7m, h7m, l7m, c7m, ph7m, pl7m)
+
+// LTF
+d5m  = fuDir(o5m, h5m, l5m, c5m, ph5m, pl5m)
+d3m  = fuDir(o3m, h3m, l3m, c3m, ph3m, pl3m)
+d2m  = fuDir(o2m, h2m, l2m, c2m, ph2m, pl2m)
+d1m  = fuDir(o1m, h1m, l1m, c1m, ph1m, pl1m)
+
+// ─── STACK SCORE (21 TFs) ────────────────────────────────────────────────────
+bulls = (d4D==1?1:0)+(d3D==1?1:0)+(d2D==1?1:0)+(d1D==1?1:0)+
+        (d11h==1?1:0)+(d7h==1?1:0)+(d5h==1?1:0)+(d4h==1?1:0)+(d3h==1?1:0)+
+        (d2h==1?1:0)+(d1h==1?1:0)+(d45m==1?1:0)+(d30m==1?1:0)+
+        (d20m==1?1:0)+(d15m==1?1:0)+(d10m==1?1:0)+(d7m==1?1:0)+
+        (d5m==1?1:0)+(d3m==1?1:0)+(d2m==1?1:0)+(d1m==1?1:0)
+
+bears = (d4D==-1?1:0)+(d3D==-1?1:0)+(d2D==-1?1:0)+(d1D==-1?1:0)+
+        (d11h==-1?1:0)+(d7h==-1?1:0)+(d5h==-1?1:0)+(d4h==-1?1:0)+(d3h==-1?1:0)+
+        (d2h==-1?1:0)+(d1h==-1?1:0)+(d45m==-1?1:0)+(d30m==-1?1:0)+
+        (d20m==-1?1:0)+(d15m==-1?1:0)+(d10m==-1?1:0)+(d7m==-1?1:0)+
+        (d5m==-1?1:0)+(d3m==-1?1:0)+(d2m==-1?1:0)+(d1m==-1?1:0)
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+txt(d) => d == 1 ? "  BULL ↑  " : d == -1 ? "  BEAR ↓  " : "    —    "
+clr(d) => d == 1 ? color.new(#00C853,0) : d == -1 ? color.new(#D50000,0) : color.new(#546E7A,0)
+bg(d)  => d == 1 ? color.new(#00C853,82) : d == -1 ? color.new(#D50000,82) : color.new(#102027,60)
+
+HDR = #1A237E
+ROW = #0D1B2A
+DIV = color.new(#263238,0)
+
+LT_C = color.new(#FF6D00,0)  // Long Term  — orange
+SW_C = color.new(#FFD600,0)  // Swing      — yellow
+ID_C = color.new(#00BCD4,0)  // Intraday   — cyan
+SC_C = color.new(#8BC34A,0)  // Scalp      — green
+LF_C = color.new(#90A4AE,0)  // LTF        — grey
+
+// ─── TABLE ───────────────────────────────────────────────────────────────────
+// Rows: 1 header + (21 TF rows) + 5 dividers + 1 stack = 28 rows
+var table T = table.new(tPos, 3, 29,
+     border_width=1, border_color=color.new(#37474F,30),
+     frame_width=2,  frame_color=color.new(#263238,0))
+
+if barstate.islast
+    // Header
+    table.cell(T, 0, 0, "  TIER  ",      bgcolor=HDR, text_color=color.white, text_size=size.small)
+    table.cell(T, 1, 0, "  TF  ",        bgcolor=HDR, text_color=color.white, text_size=size.small)
+    table.cell(T, 2, 0, "  ESTABLISHED  ",bgcolor=HDR, text_color=color.white, text_size=size.small)
+
+    // ── LONG TERM ────────────────────────────────────────────────────────────
+    table.cell(T, 0, 1, "LONG TERM", bgcolor=ROW, text_color=LT_C,        text_size=size.small)
+    table.cell(T, 1, 1, "  4D  ",    bgcolor=ROW, text_color=color.white,  text_size=size.small)
+    table.cell(T, 2, 1, txt(d4D),    bgcolor=bg(d4D), text_color=clr(d4D),text_size=size.small)
+
+    table.cell(T, 0, 2, "",          bgcolor=ROW, text_color=LT_C,         text_size=size.small)
+    table.cell(T, 1, 2, "  3D  ",    bgcolor=ROW, text_color=color.white,  text_size=size.small)
+    table.cell(T, 2, 2, txt(d3D),    bgcolor=bg(d3D), text_color=clr(d3D),text_size=size.small)
+
+    table.cell(T, 0, 3, "",          bgcolor=ROW, text_color=LT_C,         text_size=size.small)
+    table.cell(T, 1, 3, "  2D  ",    bgcolor=ROW, text_color=color.white,  text_size=size.small)
+    table.cell(T, 2, 3, txt(d2D),    bgcolor=bg(d2D), text_color=clr(d2D),text_size=size.small)
+
+    table.cell(T, 0, 4, "",          bgcolor=ROW, text_color=LT_C,         text_size=size.small)
+    table.cell(T, 1, 4, "  1D  ",    bgcolor=ROW, text_color=color.white,  text_size=size.small)
+    table.cell(T, 2, 4, txt(d1D),    bgcolor=bg(d1D), text_color=clr(d1D),text_size=size.small)
+
+    // divider
+    table.cell(T, 0, 5, "", bgcolor=DIV, text_size=size.tiny)
+    table.cell(T, 1, 5, "", bgcolor=DIV, text_size=size.tiny)
+    table.cell(T, 2, 5, "", bgcolor=DIV, text_size=size.tiny)
+
+    // ── SWING ────────────────────────────────────────────────────────────────
+    table.cell(T, 0, 6,  "SWING",    bgcolor=ROW, text_color=SW_C,          text_size=size.small)
+    table.cell(T, 1, 6,  "  11HR  ", bgcolor=ROW, text_color=color.white,   text_size=size.small)
+    table.cell(T, 2, 6,  txt(d11h),  bgcolor=bg(d11h), text_color=clr(d11h),text_size=size.small)
+
+    table.cell(T, 0, 7,  "",         bgcolor=ROW, text_color=SW_C,          text_size=size.small)
+    table.cell(T, 1, 7,  "  7HR  ",  bgcolor=ROW, text_color=color.white,   text_size=size.small)
+    table.cell(T, 2, 7,  txt(d7h),   bgcolor=bg(d7h),  text_color=clr(d7h), text_size=size.small)
+
+    table.cell(T, 0, 8,  "",         bgcolor=ROW, text_color=SW_C,          text_size=size.small)
+    table.cell(T, 1, 8,  "  5HR  ",  bgcolor=ROW, text_color=color.white,   text_size=size.small)
+    table.cell(T, 2, 8,  txt(d5h),   bgcolor=bg(d5h),  text_color=clr(d5h), text_size=size.small)
+
+    table.cell(T, 0, 9,  "",         bgcolor=ROW, text_color=SW_C,          text_size=size.small)
+    table.cell(T, 1, 9,  "  4HR  ",  bgcolor=ROW, text_color=color.white,   text_size=size.small)
+    table.cell(T, 2, 9,  txt(d4h),   bgcolor=bg(d4h),  text_color=clr(d4h), text_size=size.small)
+
+    table.cell(T, 0, 10, "",         bgcolor=ROW, text_color=SW_C,          text_size=size.small)
+    table.cell(T, 1, 10, "  3HR  ",  bgcolor=ROW, text_color=color.white,   text_size=size.small)
+    table.cell(T, 2, 10, txt(d3h),   bgcolor=bg(d3h),  text_color=clr(d3h), text_size=size.small)
+
+    // divider
+    table.cell(T, 0, 11, "", bgcolor=DIV, text_size=size.tiny)
+    table.cell(T, 1, 11, "", bgcolor=DIV, text_size=size.tiny)
+    table.cell(T, 2, 11, "", bgcolor=DIV, text_size=size.tiny)
+
+    // ── INTRADAY ─────────────────────────────────────────────────────────────
+    table.cell(T, 0, 12, "INTRADAY", bgcolor=ROW, text_color=ID_C,          text_size=size.small)
+    table.cell(T, 1, 12, "  2HR  ",  bgcolor=ROW, text_color=color.white,   text_size=size.small)
+    table.cell(T, 2, 12, txt(d2h),   bgcolor=bg(d2h),  text_color=clr(d2h), text_size=size.small)
+
+    table.cell(T, 0, 13, "",         bgcolor=ROW, text_color=ID_C,          text_size=size.small)
+    table.cell(T, 1, 13, "  1HR  ",  bgcolor=ROW, text_color=color.white,   text_size=size.small)
+    table.cell(T, 2, 13, txt(d1h),   bgcolor=bg(d1h),  text_color=clr(d1h), text_size=size.small)
+
+    table.cell(T, 0, 14, "",         bgcolor=ROW, text_color=ID_C,          text_size=size.small)
+    table.cell(T, 1, 14, "  45M  ",  bgcolor=ROW, text_color=color.white,   text_size=size.small)
+    table.cell(T, 2, 14, txt(d45m),  bgcolor=bg(d45m), text_color=clr(d45m),text_size=size.small)
+
+    table.cell(T, 0, 15, "",         bgcolor=ROW, text_color=ID_C,          text_size=size.small)
+    table.cell(T, 1, 15, "  30M  ",  bgcolor=ROW, text_color=color.white,   text_size=size.small)
+    table.cell(T, 2, 15, txt(d30m),  bgcolor=bg(d30m), text_color=clr(d30m),text_size=size.small)
+
+    // divider
+    table.cell(T, 0, 16, "", bgcolor=DIV, text_size=size.tiny)
+    table.cell(T, 1, 16, "", bgcolor=DIV, text_size=size.tiny)
+    table.cell(T, 2, 16, "", bgcolor=DIV, text_size=size.tiny)
+
+    // ── SCALP ────────────────────────────────────────────────────────────────
+    table.cell(T, 0, 17, "SCALP",    bgcolor=ROW, text_color=SC_C,          text_size=size.small)
+    table.cell(T, 1, 17, "  20M  ",  bgcolor=ROW, text_color=color.white,   text_size=size.small)
+    table.cell(T, 2, 17, txt(d20m),  bgcolor=bg(d20m), text_color=clr(d20m),text_size=size.small)
+
+    table.cell(T, 0, 18, "",         bgcolor=ROW, text_color=SC_C,          text_size=size.small)
+    table.cell(T, 1, 18, "  15M  ",  bgcolor=ROW, text_color=color.white,   text_size=size.small)
+    table.cell(T, 2, 18, txt(d15m),  bgcolor=bg(d15m), text_color=clr(d15m),text_size=size.small)
+
+    table.cell(T, 0, 19, "",         bgcolor=ROW, text_color=SC_C,          text_size=size.small)
+    table.cell(T, 1, 19, "  10M  ",  bgcolor=ROW, text_color=color.white,   text_size=size.small)
+    table.cell(T, 2, 19, txt(d10m),  bgcolor=bg(d10m), text_color=clr(d10m),text_size=size.small)
+
+    table.cell(T, 0, 20, "",         bgcolor=ROW, text_color=SC_C,          text_size=size.small)
+    table.cell(T, 1, 20, "  7M  ",   bgcolor=ROW, text_color=color.white,   text_size=size.small)
+    table.cell(T, 2, 20, txt(d7m),   bgcolor=bg(d7m),  text_color=clr(d7m), text_size=size.small)
+
+    // divider
+    table.cell(T, 0, 21, "", bgcolor=DIV, text_size=size.tiny)
+    table.cell(T, 1, 21, "", bgcolor=DIV, text_size=size.tiny)
+    table.cell(T, 2, 21, "", bgcolor=DIV, text_size=size.tiny)
+
+    // ── LTF ──────────────────────────────────────────────────────────────────
+    table.cell(T, 0, 22, "LTF",      bgcolor=ROW, text_color=LF_C,          text_size=size.small)
+    table.cell(T, 1, 22, "  5M  ",   bgcolor=ROW, text_color=color.white,   text_size=size.small)
+    table.cell(T, 2, 22, txt(d5m),   bgcolor=bg(d5m),  text_color=clr(d5m), text_size=size.small)
+
+    table.cell(T, 0, 23, "",         bgcolor=ROW, text_color=LF_C,          text_size=size.small)
+    table.cell(T, 1, 23, "  3M  ",   bgcolor=ROW, text_color=color.white,   text_size=size.small)
+    table.cell(T, 2, 23, txt(d3m),   bgcolor=bg(d3m),  text_color=clr(d3m), text_size=size.small)
+
+    table.cell(T, 0, 24, "",         bgcolor=ROW, text_color=LF_C,          text_size=size.small)
+    table.cell(T, 1, 24, "  2M  ",   bgcolor=ROW, text_color=color.white,   text_size=size.small)
+    table.cell(T, 2, 24, txt(d2m),   bgcolor=bg(d2m),  text_color=clr(d2m), text_size=size.small)
+
+    table.cell(T, 0, 25, "",         bgcolor=ROW, text_color=LF_C,          text_size=size.small)
+    table.cell(T, 1, 25, "  1M  ",   bgcolor=ROW, text_color=color.white,   text_size=size.small)
+    table.cell(T, 2, 25, txt(d1m),   bgcolor=bg(d1m),  text_color=clr(d1m), text_size=size.small)
+
+    // divider
+    table.cell(T, 0, 26, "", bgcolor=DIV, text_size=size.tiny)
+    table.cell(T, 1, 26, "", bgcolor=DIV, text_size=size.tiny)
+    table.cell(T, 2, 26, "", bgcolor=DIV, text_size=size.tiny)
+
+    // ── STACK ALIGNMENT ──────────────────────────────────────────────────────
+    score = bulls - bears
+    aTxt  = score >= 16 ? "FULL STACK BULL (" + str.tostring(bulls) + "/21)" :
+            score >= 10 ? "STRONG BULL  ("    + str.tostring(bulls) + "/21)" :
+            score >   0 ? "BULL BIAS    ("    + str.tostring(bulls) + "/21)" :
+            score <= -16? "FULL STACK BEAR (" + str.tostring(bears) + "/21)" :
+            score <= -10? "STRONG BEAR  ("    + str.tostring(bears) + "/21)" :
+            score <   0 ? "BEAR BIAS    ("    + str.tostring(bears) + "/21)" :
+                          "     MIXED / WAIT     "
+    aClr = score > 0 ? color.new(#00C853,0) : score < 0 ? color.new(#D50000,0) : color.new(#607D8B,0)
+    aBg  = score > 0 ? color.new(#00C853,80): score < 0 ? color.new(#D50000,80): color.new(#263238,60)
+
+    table.cell(T, 0, 27, "STACK",  bgcolor=ROW, text_color=color.white, text_size=size.small)
+    table.cell(T, 1, 27, "",       bgcolor=ROW, text_color=color.white, text_size=size.small)
+    table.cell(T, 2, 27, aTxt,     bgcolor=aBg, text_color=aClr,        text_size=size.small)

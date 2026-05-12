@@ -1,0 +1,182 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// MR. CASINO — FULL FU MANIPULATION INDICATOR
+// Detects and labels all manipulation types on chart.
+//
+// Types (weakest → strongest per Mr. Casino):
+//   ATT FU → FU → FU Negation → X3 → HCS → Multi-HCS
+//
+// Label priority: HCS > X3 > Negation > FU > ATT FU
+// Each candle receives its highest qualifying label only.
+// ═══════════════════════════════════════════════════════════════════════════
+//@version=5
+indicator("MrCasino — FU Indicator", overlay=true, max_labels_count=500)
+
+// ─── INPUTS ─────────────────────────────────────────────────────────────────
+grpD = "Display"
+grpS = "Detection"
+grpC = "Colors"
+
+i_showFU  = input.bool(true,  "FU Candle",   group=grpD)
+i_showAtt = input.bool(true,  "ATT FU",      group=grpD)
+i_showNeg = input.bool(true,  "FU Negation", group=grpD)
+i_showX3  = input.bool(true,  "X3",          group=grpD)
+i_showHCS = input.bool(true,  "HCS",         group=grpD)
+
+i_fuMin   = input.float(0.55, "FU Body Ratio (min)",     minval=0.3, maxval=0.95, step=0.05, group=grpS,
+     tooltip="Candle body/range. Min for a candle to count as a strong FU.")
+i_attMax  = input.float(0.35, "ATT FU Body Ratio (max)", minval=0.05, maxval=0.5, step=0.05, group=grpS,
+     tooltip="Max body/range for ATT FU (took liquidity but weak close).")
+i_hcsLook = input.int(5,      "HCS Lookback Bars",       minval=1, maxval=30,               group=grpS,
+     tooltip="How many bars back to look for the first FU when detecting HCS.")
+
+cBullFU = input.color(#00C853, "Bull FU",  group=grpC)
+cBearFU = input.color(#D50000, "Bear FU",  group=grpC)
+cAtt    = input.color(#FF6D00, "ATT FU",   group=grpC)
+cNeg    = input.color(#AA00FF, "Negation", group=grpC)
+cX3     = input.color(#FFD600, "X3",       group=grpC)
+cHCS    = input.color(#00E5FF, "HCS",      group=grpC)
+
+// ─── CANDLE METRICS ──────────────────────────────────────────────────────────
+rng   = high - low
+body  = math.abs(close - open)
+ratio = rng > 0 ? body / rng : 0.0
+
+// ─── FU DETECTION ────────────────────────────────────────────────────────────
+// Bull FU: wick below prev low AND closes bullish with strong body
+isFUBull = low  < low[1]  and close > open and ratio >= i_fuMin
+// Bear FU: wick above prev high AND closes bearish with strong body
+isFUBear = high > high[1] and close < open and ratio >= i_fuMin
+
+// ─── ATT FU (ATTEMPTED FU) ───────────────────────────────────────────────────
+// Takes liquidity but closes weakly — minor liquidity generated only
+isAttBull = low  < low[1]  and ratio <= i_attMax and not isFUBull
+isAttBear = high > high[1] and ratio <= i_attMax and not isFUBear
+
+// ─── FU NEGATION ─────────────────────────────────────────────────────────────
+// FU opposite to the previous 1-2 candles (ATT FU counts as phase 1 per Mr. C)
+isNegBull = isFUBull and (isFUBear[1] or isAttBear[1] or isFUBear[2] or isAttBear[2])
+isNegBear = isFUBear and (isFUBull[1] or isAttBull[1] or isFUBull[2] or isAttBull[2])
+
+// ─── HCS (HIGH CONFLUENCE SETUP) ─────────────────────────────────────────────
+// FU → price retests into FU zone → FU same direction again
+// HCS = double the strength of FU on same TF (30m HCS = 1hr FU in power)
+//
+// Detect HCS BEFORE updating reference values (order matters)
+
+var float hBullLo  = na   // low of reference bull FU (the wick)
+var float hBullCl  = na   // close of reference bull FU (top of body)
+var int   hBullBar = -999
+
+var float hBearHi  = na   // high of reference bear FU (the wick)
+var float hBearCl  = na   // close of reference bear FU (bottom of body)
+var int   hBearBar = -999
+
+withinBull = bar_index - hBullBar > 0 and bar_index - hBullBar <= i_hcsLook
+withinBear = bar_index - hBearBar > 0 and bar_index - hBearBar <= i_hcsLook
+
+// HCS Bull: current bull FU's low retests into the reference bull FU's body/wick zone
+isHCSBull = isFUBull and withinBull and low <= hBullCl
+
+// HCS Bear: current bear FU's high retests into the reference bear FU's body/wick zone
+isHCSBear = isFUBear and withinBear and high >= hBearCl
+
+// Now update reference values for next bar's HCS check
+if isFUBull
+    hBullLo  := low
+    hBullCl  := close
+    hBullBar := bar_index
+
+if isFUBear
+    hBearHi  := high
+    hBearCl  := close
+    hBearBar := bar_index
+
+// ─── X3 STATE MACHINE ────────────────────────────────────────────────────────
+// X3 = FU wick + negation attempt + negation broken = strongest manipulation
+//
+// Phase 1: FU establishes direction
+// Phase 2: Opposite FU or ATT FU (negation attempt)
+// Phase 3: Price breaks phase 2 extreme back in original direction → X3 confirmed
+
+var int   xState = 0    //  1 = bull P1 |  2 = bull P2 (neg attempt)
+                        // -1 = bear P1 | -2 = bear P2 (neg attempt)
+var float xNegHi = na   // high of the negation attempt candle (for bull X3)
+var float xNegLo = na   // low  of the negation attempt candle (for bear X3)
+var int   xP1Bar = 0
+
+isX3Bull = false
+isX3Bear = false
+
+// Phase 3: check FIRST before state updates
+if xState == 2 and not na(xNegHi) and high > xNegHi
+    isX3Bull := true
+    xState   := 0
+
+if xState == -2 and not na(xNegLo) and low < xNegLo
+    isX3Bear := true
+    xState   := 0
+
+// Phase 1: new FU starts a sequence
+if isFUBull and xState != 2
+    xState  := 1
+    xP1Bar  := bar_index
+    xNegHi  := na
+
+if isFUBear and xState != -2
+    xState  := -1
+    xP1Bar  := bar_index
+    xNegLo  := na
+
+// Phase 2: negation attempt detected
+if xState == 1 and bar_index > xP1Bar and (isFUBear or isAttBear)
+    xState  := 2
+    xNegHi  := high
+
+if xState == -1 and bar_index > xP1Bar and (isFUBull or isAttBull)
+    xState  := -2
+    xNegLo  := low
+
+// ─── LABEL PRIORITY ──────────────────────────────────────────────────────────
+// One label per candle. Strength order determines which label wins.
+
+plotHCSb = i_showHCS and isHCSBull
+plotHCSr = i_showHCS and isHCSBear
+plotX3b  = i_showX3  and isX3Bull  and not plotHCSb
+plotX3r  = i_showX3  and isX3Bear  and not plotHCSr
+plotNegb = i_showNeg and isNegBull and not plotHCSb and not plotX3b
+plotNegr = i_showNeg and isNegBear and not plotHCSr and not plotX3r
+plotFUb  = i_showFU  and isFUBull  and not plotHCSb and not plotX3b and not plotNegb
+plotFUr  = i_showFU  and isFUBear  and not plotHCSr and not plotX3r and not plotNegr
+plotAttb = i_showAtt and isAttBull and not plotNegb
+plotAttr = i_showAtt and isAttBear and not plotNegr
+
+// ─── LABELS ──────────────────────────────────────────────────────────────────
+if plotHCSb
+    label.new(bar_index, low,  "HCS↑", style=label.style_label_up,   color=color.new(cHCS,   0), textcolor=color.black, size=size.normal)
+if plotHCSr
+    label.new(bar_index, high, "HCS↓", style=label.style_label_down, color=color.new(cHCS,   0), textcolor=color.black, size=size.normal)
+
+if plotX3b
+    label.new(bar_index, low,  "X3↑",  style=label.style_label_up,   color=color.new(cX3,    0), textcolor=color.black, size=size.normal)
+if plotX3r
+    label.new(bar_index, high, "X3↓",  style=label.style_label_down, color=color.new(cX3,    0), textcolor=color.black, size=size.normal)
+
+if plotNegb
+    label.new(bar_index, low,  "NEG↑", style=label.style_label_up,   color=color.new(cNeg,   0), textcolor=color.white, size=size.small)
+if plotNegr
+    label.new(bar_index, high, "NEG↓", style=label.style_label_down, color=color.new(cNeg,   0), textcolor=color.white, size=size.small)
+
+if plotFUb
+    label.new(bar_index, low,  "FU↑",  style=label.style_label_up,   color=color.new(cBullFU,0), textcolor=color.white, size=size.small)
+if plotFUr
+    label.new(bar_index, high, "FU↓",  style=label.style_label_down, color=color.new(cBearFU,0), textcolor=color.white, size=size.small)
+
+if plotAttb
+    label.new(bar_index, low,  "ATT↑", style=label.style_label_up,   color=color.new(cAtt,   0), textcolor=color.white, size=size.tiny)
+if plotAttr
+    label.new(bar_index, high, "ATT↓", style=label.style_label_down, color=color.new(cAtt,   0), textcolor=color.white, size=size.tiny)
+
+// ─── BACKGROUND HIGHLIGHTS ───────────────────────────────────────────────────
+// Subtle highlight on the two strongest signals so they pop on the chart
+bgcolor((plotHCSb or plotHCSr) ? color.new(cHCS, 90) : na)
+bgcolor((plotX3b  or plotX3r)  ? color.new(cX3,  90) : na)
