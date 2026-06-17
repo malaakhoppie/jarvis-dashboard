@@ -25,6 +25,11 @@ def _layout(**kw):
     """Merge base theme with per-chart overrides (xaxis/yaxis/etc)."""
     return {**_BASE, "xaxis": _AX, "yaxis": _AX, **kw}
 
+def _fmt12(h: int, m: int) -> str:
+    """8,0 → '8:00AM'  16,0 → '4:00PM'"""
+    p = "AM" if h < 12 else "PM"
+    return f"{h % 12 or 12}:{m:02d}{p}"
+
 def _gauge_layout(**kw):
     """Base theme without axes for gauge charts."""
     return {**_BASE, **kw}
@@ -185,6 +190,9 @@ def render_overview():
 
     st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
 
+    # ── Session Clock + Kill Zones ────────────────────────────────────────────
+    _render_session_clock_mini()
+
     # ── Charts row ────────────────────────────────────────────────────────────
     ca, cb = st.columns([3, 2])
 
@@ -193,8 +201,9 @@ def render_overview():
                     "letter-spacing:0.13em;margin-bottom:0.5rem'>Equity Curve</div>",
                     unsafe_allow_html=True)
 
-        # Start from first trade date at starting balance
-        ec_start = _ftd or cfg.get("start_date") or str(date.today())
+        # Start from account start date (not first trade date — show flat line before first trade)
+        _start_date = ((_active_acct or {}).get("start_date")) or cfg.get("start_date") or _ftd or str(date.today())
+        ec_start = _start_date
         eq_map: dict[str, float] = {ec_start: start_bal}
 
         if summaries or trades:
@@ -218,6 +227,9 @@ def render_overview():
                 else:
                     running += trade_day_pnl.get(d, s.get("pnl", 0) or 0)
                 eq_map[d] = running
+
+        # Always end at today's real balance — never leave it unanchored
+        eq_map[str(date.today())] = curr_bal
 
         eq_entries = sorted(eq_map.items())
         eq_dates   = [e[0] for e in eq_entries]
@@ -281,46 +293,60 @@ def render_overview():
         st.markdown("<div style='color:#9999cc;font-size:0.62rem;text-transform:uppercase;"
                     "letter-spacing:0.13em;margin-bottom:0.5rem'>Daily Balance (OHLC)</div>",
                     unsafe_allow_html=True)
-        # Build per-day OHLC from trades
-        td_pnls: dict[str, list[float]] = {}
-        for t in trades:
-            d = str(t.get("date", ""))[:10]
-            if d:
-                td_pnls.setdefault(d, []).append(t.get("pnl", 0) or 0)
 
-        if td_pnls:
-            smry_cb = {s.get("date", ""): (s.get("eval_balance") or 0) for s in summaries}
-            all_td  = sorted(td_pnls.keys())
-            d_open: dict[str, float] = {}
-            d_close: dict[str, float] = {}
+        ohlc_data: dict[str, dict] = {}
+        smry_bal_map = {s.get("date", ""): (s.get("eval_balance") or 0) for s in summaries}
+
+        if trades:
+            td_pnls: dict[str, list[float]] = {}
+            for t in trades:
+                d = str(t.get("date", ""))[:10]
+                if d:
+                    td_pnls.setdefault(d, []).append(t.get("pnl", 0) or 0)
             run_cb = start_bal
-            for d in all_td:
-                d_open[d] = run_cb
-                for p in td_pnls[d]:
-                    run_cb += p
-                if smry_cb.get(d, 0) > 0:
-                    run_cb = smry_cb[d]
-                d_close[d] = run_cb
-
-            last7  = all_td[-7:]
-            oc_x, oc_o, oc_h, oc_l, oc_c = [], [], [], [], []
-            for d in last7:
-                o = d_open[d]
-                c = d_close[d]
+            for d in sorted(td_pnls.keys()):
+                o = run_cb
                 intra = [o]
                 r = o
                 for p in td_pnls[d]:
                     r += p
                     intra.append(r)
-                oc_x.append(d[-5:])
-                oc_o.append(o)
-                oc_h.append(max(intra))
-                oc_l.append(min(intra))
-                oc_c.append(c)
+                run_cb = smry_bal_map[d] if smry_bal_map.get(d, 0) > 0 else intra[-1]
+                ohlc_data[d] = {"open": o, "high": max(intra), "low": min(intra), "close": run_cb}
+        elif summaries:
+            run_cb = start_bal
+            for s in sorted(summaries, key=lambda x: x.get("date") or ""):
+                d = s.get("date", "")
+                if not d:
+                    continue
+                o   = run_cb
+                pnl = s.get("pnl", 0) or 0
+                eb  = s.get("eval_balance") or 0
+                run_cb = eb if eb > 0 else (o + pnl)
+                ohlc_data[d] = {"open": o, "high": max(o, run_cb), "low": min(o, run_cb), "close": run_cb}
 
+        # Always end at today's real balance
+        td_str = str(date.today())
+        if td_str in ohlc_data:
+            ohlc_data[td_str]["close"] = curr_bal
+            ohlc_data[td_str]["high"]  = max(ohlc_data[td_str]["high"], curr_bal)
+            ohlc_data[td_str]["low"]   = min(ohlc_data[td_str]["low"],  curr_bal)
+        elif ohlc_data:
+            prev = ohlc_data[sorted(ohlc_data.keys())[-1]]["close"]
+            ohlc_data[td_str] = {
+                "open": prev, "high": max(prev, curr_bal),
+                "low": min(prev, curr_bal), "close": curr_bal,
+            }
+
+        if ohlc_data:
+            last7 = sorted(ohlc_data.keys())[-7:]
+            oc_x  = [d[-5:] for d in last7]
+            oc_o  = [ohlc_data[d]["open"]  for d in last7]
+            oc_h  = [ohlc_data[d]["high"]  for d in last7]
+            oc_l  = [ohlc_data[d]["low"]   for d in last7]
+            oc_c  = [ohlc_data[d]["close"] for d in last7]
             all_v = oc_o + oc_h + oc_l + oc_c
             y_pad = max((max(all_v) - min(all_v)) * 0.3, 40)
-
             fig = go.Figure(go.Candlestick(
                 x=oc_x, open=oc_o, high=oc_h, low=oc_l, close=oc_c,
                 increasing_line_color="#00e676",
@@ -407,7 +433,7 @@ def render_overview():
                     f"</div>", unsafe_allow_html=True)
         else:
             st.markdown("<div style='background:#09090f;border:1px solid #13132a;border-radius:8px;"
-                        "padding:0.8rem;color:#252548;font-size:0.8rem'>No active flags</div>",
+                        "padding:0.8rem;color:#7777aa;font-size:0.8rem'>No active flags</div>",
                         unsafe_allow_html=True)
 
     with bot_r:
@@ -417,9 +443,6 @@ def render_overview():
         _7day_table(summaries)
 
     st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
-
-    # ── Session Clock ─────────────────────────────────────────────────────────
-    _render_session_clock_mini()
 
     # ── Today's Session ───────────────────────────────────────────────────────
     _render_session_trades(trades)
@@ -577,7 +600,7 @@ def _render_session_clock_mini():
             f"letter-spacing:0.08em;text-transform:uppercase;margin-bottom:0.15rem'>"
             f"{pulse}{s_name}{live}</div>"
             f"<div style='color:{sub};font-size:0.68rem;"
-            f"font-family:JetBrains Mono,monospace'>{sh:02d}:{sm:02d}–{eh:02d}:{em:02d} ET</div>"
+            f"font-family:JetBrains Mono,monospace'>{_fmt12(sh,sm)}–{_fmt12(eh,em)} ET</div>"
             f"</div>"
         )
     st.markdown(
@@ -606,7 +629,7 @@ def _render_session_clock_mini():
             f"<div style='color:{kz_color};font-size:0.6rem;font-weight:700;"
             f"letter-spacing:0.07em;text-transform:uppercase'>{dot}{kz_name}</div>"
             f"<div style='color:{kz_color}88;font-size:0.6rem;"
-            f"font-family:JetBrains Mono,monospace'>{sh:02d}:{sm:02d}–{eh:02d}:{em:02d} ET</div>"
+            f"font-family:JetBrains Mono,monospace'>{_fmt12(sh,sm)}–{_fmt12(eh,em)} ET</div>"
             f"</div>"
         )
     st.markdown(
@@ -654,7 +677,7 @@ def _render_session_trades(trades: list[dict]):
     else:
         status_html = (
             "<span style='display:inline-block;width:7px;height:7px;border-radius:50%;"
-            "background:#252548;margin-right:0.5rem;vertical-align:middle'></span>"
+            "background:#555577;margin-right:0.5rem;vertical-align:middle'></span>"
             "<span style='color:#9999cc'>BETWEEN SESSIONS</span>"
         )
 

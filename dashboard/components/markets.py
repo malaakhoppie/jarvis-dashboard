@@ -32,7 +32,7 @@ KILL_ZONES = [
 
 def _section(label: str):
     st.markdown(
-        f"<div style='color:#6666aa;font-size:0.62rem;font-weight:600;text-transform:uppercase;"
+        f"<div style='color:#9999cc;font-size:0.62rem;font-weight:600;text-transform:uppercase;"
         f"letter-spacing:0.14em;margin:1.4rem 0 0.6rem;padding-bottom:0.4rem;"
         f"border-bottom:1px solid #1a1a2e'>{label}</div>",
         unsafe_allow_html=True,
@@ -57,10 +57,15 @@ def _render_market_banner():
         f"box-shadow:0 0 10px {dot_col};{anim}flex-shrink:0'></div>"
         f"<span style='color:{dot_col};font-size:0.78rem;font-weight:700;"
         f"letter-spacing:0.08em'>{label}</span>"
-        f"<span style='color:#6666aa;font-size:0.78rem'>{detail}</span>"
+        f"<span style='color:#9999cc;font-size:0.78rem'>{detail}</span>"
         f"</div>",
         unsafe_allow_html=True,
     )
+
+
+def _fmt12(h: int, m: int) -> str:
+    p = "AM" if h < 12 else "PM"
+    return f"{h % 12 or 12}:{m:02d}{p}"
 
 
 def _render_session_clock():
@@ -93,7 +98,7 @@ def _render_session_clock():
         border   = f"2px solid {s_color}" if is_on else f"1px solid {s_color}28"
         txt      = "#060608" if is_on else s_color
         sub_txt  = "rgba(0,0,0,0.55)" if is_on else f"{s_color}88"
-        time_str = f"{sh:02d}:{sm:02d}–{eh:02d}:{em:02d} ET"
+        time_str = f"{_fmt12(sh, sm)}–{_fmt12(eh, em)} ET"
         live_badge = (
             f"<span style='background:rgba(0,0,0,0.18);color:#060608;font-size:0.55rem;"
             f"font-weight:800;padding:1px 5px;border-radius:3px;margin-left:0.3rem;"
@@ -127,8 +132,10 @@ def _render_session_clock():
         f"</div>"
         f"<div style='color:#f0f0f8;font-size:1.55rem;font-weight:700;"
         f"font-family:JetBrains Mono,monospace;letter-spacing:-0.02em'>"
-        f"{now.strftime('%H:%M')}<span style='color:#6666aa;font-size:0.9rem'> ET</span></div>"
-        f"<div style='color:#6666aa;font-size:0.8rem;line-height:1.4'>"
+        f"{now.hour % 12 or 12}:{now.minute:02d}"
+        f"<span style='color:#f0b429;font-size:1rem;font-weight:700'>{'AM' if now.hour < 12 else 'PM'}</span>"
+        f"<span style='color:#9999cc;font-size:0.85rem'> EST</span></div>"
+        f"<div style='color:#9999cc;font-size:0.8rem;line-height:1.4'>"
         f"{now.strftime('%A, %b %d')}<br>"
         f"<span style='color:#8888bb'>{('closes in ' if active else 'opens in ')}"
         f"{rem_h}h {rem_m}m &rarr; {nxt}</span>"
@@ -179,7 +186,7 @@ def _render_kill_zones():
             badge_col = color
             pulse_dot = ""
 
-        time_str = f"{sh:02d}:{sm:02d}–{eh:02d}:{em:02d} ET"
+        time_str = f"{_fmt12(sh, sm)}–{_fmt12(eh, em)} ET"
 
         pills += (
             f"<div style='background:{bg};border:{border};border-radius:10px;"
@@ -212,7 +219,7 @@ def _render_prices():
 
     if not prices:
         st.markdown(
-            "<div style='color:#6666aa;font-size:0.85rem;padding:1rem'>Price data unavailable. "
+            "<div style='color:#9999cc;font-size:0.85rem;padding:1rem'>Price data unavailable. "
             "Install yfinance: <code>pip install yfinance</code></div>",
             unsafe_allow_html=True,
         )
@@ -232,7 +239,7 @@ def _render_prices():
                 f"padding:0.85rem 1rem;margin-bottom:0.7rem;border-left:3px solid {p['color']}'>"
                 f"<div style='display:flex;justify-content:space-between;align-items:flex-start'>"
                 f"<div>"
-                f"<div style='color:#6666aa;font-size:0.6rem;text-transform:uppercase;"
+                f"<div style='color:#9999cc;font-size:0.6rem;text-transform:uppercase;"
                 f"letter-spacing:0.1em'>{p['name']}</div>"
                 f"<div style='color:#f0f0f8;font-size:1.2rem;font-weight:700;"
                 f"font-family:JetBrains Mono,monospace;margin-top:0.1rem'>{fmt}</div>"
@@ -255,7 +262,7 @@ def _render_tda():
     if not _API_KEY:
         st.markdown(
             "<div style='background:#0d0d20;border:1px solid #1e1e38;border-radius:10px;padding:1rem;"
-            "color:#6666aa;font-size:0.85rem'>Add ANTHROPIC_API_KEY to config/config.env to enable AI TDA</div>",
+            "color:#9999cc;font-size:0.85rem'>Add ANTHROPIC_API_KEY to config/config.env to enable AI TDA</div>",
             unsafe_allow_html=True,
         )
         return
@@ -277,7 +284,7 @@ def _render_tda():
         )
 
     if not tda:
-        st.markdown("<div style='color:#6666aa'>No TDA generated yet.</div>", unsafe_allow_html=True)
+        st.markdown("<div style='color:#9999cc'>No TDA generated yet.</div>", unsafe_allow_html=True)
         return
 
     sections = {
@@ -357,7 +364,7 @@ def _render_news():
 
     if not headlines:
         st.markdown(
-            "<div style='color:#6666aa;font-size:0.85rem'>News feed unavailable — check connection.</div>",
+            "<div style='color:#9999cc;font-size:0.85rem'>News feed unavailable — check connection.</div>",
             unsafe_allow_html=True,
         )
         return

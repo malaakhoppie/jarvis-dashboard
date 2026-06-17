@@ -198,7 +198,9 @@ def get_market_status() -> dict:
     if tot >= OPEN:
         # Past 6 PM — next close is tomorrow at 5 PM
         next_close += timedelta(days=1)
-    return {"open": True, "detail": f"Closes {next_close.strftime('%a %H:%M ET')} · {_fmt_eta(now, next_close)}"}
+    _nc_h12 = next_close.hour % 12 or 12
+    _nc_pm  = "AM" if next_close.hour < 12 else "PM"
+    return {"open": True, "detail": f"Closes {next_close.strftime('%a')} {_nc_h12}:{next_close.minute:02d}{_nc_pm} ET · {_fmt_eta(now, next_close)}"}
 
 
 @st.cache_data(ttl=3600)

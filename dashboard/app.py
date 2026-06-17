@@ -364,6 +364,8 @@ except Exception:
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     _now_sb = datetime.now(_EST)
+    _sb_h12 = _now_sb.hour % 12 or 12
+    _sb_pm  = "AM" if _now_sb.hour < 12 else "PM"
     st.markdown(
         f"<div style='padding:0.2rem 0 1rem'>"
         f"<div style='display:flex;align-items:center;gap:0.6rem;margin-bottom:0.25rem'>"
@@ -373,12 +375,12 @@ with st.sidebar:
         f"</div>"
         f"<div style='color:#6666aa;font-size:0.72rem;letter-spacing:0.18em;"
         f"text-transform:uppercase;margin-bottom:0.5rem'>Trading Intelligence</div>"
-        f"<div style='display:flex;align-items:baseline;gap:0.45rem;margin-bottom:0.5rem'>"
+        f"<div style='display:flex;align-items:baseline;gap:0.4rem;margin-bottom:0.5rem'>"
         f"<span style='color:#f0f0f8;font-size:1.25rem;font-weight:700;"
         f"font-family:JetBrains Mono,monospace;letter-spacing:0.02em'>"
-        f"{_now_sb.strftime('%H:%M')}</span>"
-        f"<span style='color:#f0b429;font-size:0.7rem;font-weight:700;"
-        f"letter-spacing:0.1em'>EST</span>"
+        f"{_sb_h12}:{_now_sb.minute:02d}</span>"
+        f"<span style='color:#f0b429;font-size:0.78rem;font-weight:700'>{_sb_pm}</span>"
+        f"<span style='color:#f0b429;font-size:0.65rem;font-weight:700;letter-spacing:0.1em'>EST</span>"
         f"<span style='color:#555577;font-size:0.7rem'>{_now_sb.strftime('%a %b %d')}</span>"
         f"</div>"
         f"<div style='height:1px;background:linear-gradient(90deg,#f0b42944,transparent)'></div>"
