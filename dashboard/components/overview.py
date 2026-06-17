@@ -399,9 +399,9 @@ def _render_week_strip(trades, summaries, start_bal, ddl, today_pnl, ddl_hit):
 def _render_session_trades(trades: list[dict]):
     """Live session indicator + today's trades with refresh."""
     KILL_ZONES = [
-        ("London Kill Zone",  2,  0,  5,  0, "#00d4ff"),
-        ("NY Kill Zone",      7,  0, 12,  0, "#00e676"),
-        ("3PM Window",       15,  0, 16, 30, "#f0b429"),
+        ("London Kill Zone",   2,  0,  5,  0, "#00d4ff"),
+        ("NY Kill Zone",       7,  0, 12,  0, "#00e676"),
+        ("Afternoon NY KZ",   15,  0, 16, 30, "#f0b429"),
     ]
     now = datetime.now(EST)
     today_str = str(date.today())

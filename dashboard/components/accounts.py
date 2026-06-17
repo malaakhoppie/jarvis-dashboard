@@ -32,9 +32,12 @@ def _load_accounts() -> list[dict]:
 
 def _save_accounts(accounts: list[dict]):
     path = ROOT / "config" / "accounts.json"
-    existing = json.loads(path.read_text()) if path.exists() else {}
-    existing["accounts"] = accounts
-    path.write_text(json.dumps(existing, indent=2))
+    try:
+        existing = json.loads(path.read_text()) if path.exists() else {}
+        existing["accounts"] = accounts
+        path.write_text(json.dumps(existing, indent=2))
+    except (OSError, PermissionError):
+        st.warning("Running on Streamlit Cloud — account edits are not persisted. Update accounts.json locally and redeploy.")
 
 
 def _replace_account(updated: dict, all_accounts: list[dict]) -> list[dict]:

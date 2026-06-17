@@ -390,11 +390,18 @@ with st.sidebar:
     except Exception:
         pass
 
+    _pages = ["Overview", "Markets", "Accounts", "Analytics", "Build Tracker", "AI Advisor", "Settings"]
+    _qp    = st.query_params.get("page", "Overview")
+    _idx   = _pages.index(_qp) if _qp in _pages else 0
+
     page = st.radio(
         "nav",
-        ["Overview", "Markets", "Accounts", "Analytics", "Build Tracker", "AI Advisor", "Settings"],
+        _pages,
+        index=_idx,
         label_visibility="collapsed",
     )
+    if st.query_params.get("page") != page:
+        st.query_params["page"] = page
 
     st.divider()
 
