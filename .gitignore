@@ -1,4 +1,12 @@
 .DS_Store
+.streamlit/secrets.toml
 *.log
 __pycache__/
 *.pyc
+*.pyo
+config/
+scripts/discord_export.ps1
+context/discord-extracts/
+context/telegram-extracts/
+*.mp4
+*.mp3
