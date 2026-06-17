@@ -12,9 +12,9 @@ ROOT       = Path(__file__).parent.parent.parent
 CONFIG_ENV = ROOT / "config" / "config.env"
 
 _CORRECT_TABLE_IDS = {
-    "trades":        "tblQx04ovCVqlE3va",
-    "daily_summary": "tblNwbrJMSIL8hJb9",
-    "pattern_flags": "tblZG4C8mmH4kN4BH",
+    "trades":        "tblfv80VJAqPhDEEv",
+    "daily_summary": "tbllVPpFNcuZtsKkR",
+    "pattern_flags": "tblT56US1WkW1Lhnr",
 }
 
 
@@ -100,7 +100,7 @@ def render_settings():
     st.markdown("#### Connections")
 
     airtable_key  = env.get("AIRTABLE_API_KEY", "")
-    airtable_base = env.get("AIRTABLE_BASE_ID", "appg72lUB8VIEKWy4")
+    airtable_base = env.get("AIRTABLE_BASE_ID", "appb9vY09Oa5RntWl")
     anthropic_key = env.get("ANTHROPIC_API_KEY", "")
     tv_user       = env.get("TRADOVATE_USERNAME", "")
     tv_mode       = env.get("TRADOVATE_MODE", "demo")
@@ -171,7 +171,7 @@ def render_settings():
             with k1:
                 new_anthropic     = st.text_input("Anthropic API Key",  value=env.get("ANTHROPIC_API_KEY", ""),  type="password")
                 new_airtable_key  = st.text_input("Airtable API Key",   value=env.get("AIRTABLE_API_KEY", ""),   type="password")
-                new_airtable_base = st.text_input("Airtable Base ID",   value=env.get("AIRTABLE_BASE_ID", "appg72lUB8VIEKWy4"))
+                new_airtable_base = st.text_input("Airtable Base ID",   value=env.get("AIRTABLE_BASE_ID", "appb9vY09Oa5RntWl"))
             with k2:
                 new_tv_user   = st.text_input("Tradovate Username", value=env.get("TRADOVATE_USERNAME", ""))
                 new_tv_cid    = st.text_input("Tradovate CID",      value=env.get("TRADOVATE_CID", ""))

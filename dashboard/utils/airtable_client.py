@@ -17,13 +17,13 @@ def _secret(key: str, default: str = "") -> str:
 
 
 _API_KEY = _secret("AIRTABLE_API_KEY")
-_BASE_ID = _secret("AIRTABLE_BASE_ID", "appg72lUB8VIEKWy4")
+_BASE_ID = _secret("AIRTABLE_BASE_ID", "appb9vY09Oa5RntWl")
 _BASE_URL = f"https://api.airtable.com/v0/{_BASE_ID}"
 
 _TABLES = {
-    "trades":        "tblQx04ovCVqlE3va",
-    "daily_summary": "tblNwbrJMSIL8hJb9",
-    "pattern_flags": "tblZG4C8mmH4kN4BH",
+    "trades":        "tblfv80VJAqPhDEEv",
+    "daily_summary": "tbllVPpFNcuZtsKkR",
+    "pattern_flags": "tblT56US1WkW1Lhnr",
 }
 
 
