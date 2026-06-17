@@ -334,7 +334,7 @@ _RESULT_MAP = {"Win": "Win", "Loss": "Loss", "Breakeven": "BE", "BE": "BE"}
 _SESSION_VALID = {"NY", "London", "NY-London Overlap", "Asia", "After Hours"}
 
 
-def fills_to_airtable_fields(fill: dict, rule_score: int = 4, result: str | None = None) -> dict:
+def fills_to_airtable_fields(fill: dict, rule_score: int | None = None, result: str | None = None) -> dict:
     """Convert a parsed trade/fill to Airtable field format."""
     pnl = fill.get("pnl") or 0.0
 
@@ -373,6 +373,6 @@ def fills_to_airtable_fields(fill: dict, rule_score: int = 4, result: str | None
         "Session":            session,
         "Result":             result,
         "Source":             "Tradovate Performance CSV",
-        "Rule Score (0-8)":   rule_score,
         "Notes":              " ".join(notes_parts),
+        **({"Rule Score (0-8)": rule_score} if rule_score is not None else {}),
     }
