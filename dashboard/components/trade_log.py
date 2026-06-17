@@ -2,7 +2,10 @@ import json
 import streamlit as st
 from datetime import datetime
 from pathlib import Path
-from utils.airtable_client import get_trades, create_trade, get_last_post_error
+from utils.airtable_client import (
+    get_trades, create_trade, get_last_post_error,
+    delete_trade, delete_trades, delete_daily_summary, get_daily_summaries,
+)
 from utils.tradovate_client import get_fills, credentials_status
 from utils.tradovate_csv import parse_tradovate_csv, parse_tradovate_pdf, fills_to_airtable_fields
 
@@ -112,7 +115,35 @@ def render_trade_log():
 
 
 def _render_airtable_trades():
+    from datetime import date as _date
     trades = get_trades(60)
+
+    # ── Bulk delete by date ───────────────────────────────────────────────────
+    with st.expander("Delete by Date", expanded=False):
+        all_dates = sorted({str(t.get("date", ""))[:10] for t in trades if t.get("date")}, reverse=True)
+        if all_dates:
+            del_col1, del_col2 = st.columns([2, 1])
+            with del_col1:
+                del_date = st.selectbox("Select date to clear", all_dates, key="del_date_sel")
+            with del_col2:
+                st.markdown("<div style='height:1.8rem'></div>", unsafe_allow_html=True)
+                if st.button("Delete all trades on this date", key="del_date_btn", type="secondary"):
+                    to_del = [t["id"] for t in trades if str(t.get("date", ""))[:10] == del_date and t.get("id")]
+                    if to_del:
+                        ok, fail = delete_trades(to_del)
+                        # Also delete daily summary for that date
+                        summaries = get_daily_summaries(60)
+                        for s in summaries:
+                            if str(s.get("date", ""))[:10] == del_date and s.get("id"):
+                                delete_daily_summary(s["id"])
+                        if ok:
+                            st.success(f"Deleted {ok} trade(s) for {del_date}.")
+                        if fail:
+                            st.error(f"{fail} trade(s) failed to delete.")
+                        st.rerun()
+        else:
+            st.markdown("<div style='color:#9999cc;font-size:0.82rem'>No trades to delete.</div>",
+                        unsafe_allow_html=True)
 
     with st.expander("Filters", expanded=False):
         fc1, fc2, fc3 = st.columns(3)
@@ -160,25 +191,36 @@ def _render_airtable_trades():
             rule_txt = f"{rule}/8" if rule is not None else "—"
             ddl = t.get("ddl_status", "")
             ddl_col = "#ff4444" if ddl == "Hit" else "#00e676" if ddl == "Clear" else "#8888aa"
+            rec_id = t.get("id", "")
 
-            st.markdown(
-                f"<div style='background:#0c0c14;border:1px solid #1a1a2e;border-radius:10px;padding:0.8rem 1.2rem;margin-bottom:0.4rem'>"
-                f"<div style='display:flex;gap:1.5rem;align-items:center;flex-wrap:wrap'>"
-                f"<span style='color:#8888aa;font-family:JetBrains Mono,monospace;font-size:0.78rem;min-width:90px'>{str(t.get('date',''))[:10]}</span>"
-                f"<span style='color:#f0f0f8;font-weight:700;min-width:55px'>{t.get('symbol','—')}</span>"
-                f"<span style='background:{dir_col}22;color:{dir_col};padding:1px 8px;border-radius:999px;font-size:0.75rem;min-width:50px;text-align:center'>{t.get('direction','—')}</span>"
-                f"<span style='color:{pnl_col};font-weight:700;font-family:JetBrains Mono,monospace;min-width:80px'>{'+' if pnl >= 0 else ''}${pnl:,.2f}</span>"
-                f"<span style='color:#8888aa;font-size:0.78rem'>Rule <span style='color:#f0f0f8'>{rule_txt}</span></span>"
-                f"<span style='color:{adh_col};font-size:0.78rem'>{adh}</span>"
-                f"<span style='color:#8888aa;font-size:0.78rem'>{t.get('session','')}</span>"
-                f"<span style='color:{ddl_col};font-size:0.72rem'>{ddl}</span>"
-                f"</div>"
-                + (f"<div style='color:#44445a;font-size:0.74rem;margin-top:0.35rem;padding-top:0.3rem;border-top:1px solid #1a1a2e'>{t.get('notes','')}</div>" if t.get("notes") else "")
-                + "</div>",
-                unsafe_allow_html=True,
-            )
+            row_col, del_col = st.columns([10, 1])
+            with row_col:
+                st.markdown(
+                    f"<div style='background:#0c0c14;border:1px solid #1a1a2e;border-radius:10px;padding:0.8rem 1.2rem;margin-bottom:0.1rem'>"
+                    f"<div style='display:flex;gap:1.5rem;align-items:center;flex-wrap:wrap'>"
+                    f"<span style='color:#9999cc;font-family:JetBrains Mono,monospace;font-size:0.78rem;min-width:90px'>{str(t.get('date',''))[:10]}</span>"
+                    f"<span style='color:#f0f0f8;font-weight:700;min-width:55px'>{t.get('symbol','—')}</span>"
+                    f"<span style='background:{dir_col}22;color:{dir_col};padding:1px 8px;border-radius:999px;font-size:0.75rem;min-width:50px;text-align:center'>{t.get('direction','—')}</span>"
+                    f"<span style='color:{pnl_col};font-weight:700;font-family:JetBrains Mono,monospace;min-width:80px'>{'+' if pnl >= 0 else ''}${pnl:,.2f}</span>"
+                    f"<span style='color:#9999cc;font-size:0.78rem'>Rule <span style='color:#f0f0f8'>{rule_txt}</span></span>"
+                    f"<span style='color:{adh_col};font-size:0.78rem'>{adh}</span>"
+                    f"<span style='color:#9999cc;font-size:0.78rem'>{t.get('session','')}</span>"
+                    f"<span style='color:{ddl_col};font-size:0.72rem'>{ddl}</span>"
+                    f"</div>"
+                    + (f"<div style='color:#7777aa;font-size:0.74rem;margin-top:0.35rem;padding-top:0.3rem;border-top:1px solid #1a1a2e'>{t.get('notes','')}</div>" if t.get("notes") else "")
+                    + "</div>",
+                    unsafe_allow_html=True,
+                )
+            with del_col:
+                st.markdown("<div style='height:0.35rem'></div>", unsafe_allow_html=True)
+                if rec_id and st.button("✕", key=f"del_{rec_id}", help="Delete this trade"):
+                    if delete_trade(rec_id):
+                        st.success("Deleted.")
+                        st.rerun()
+                    else:
+                        st.error("Delete failed.")
     else:
-        st.markdown("<div style='color:#44445a;padding:2rem;text-align:center;font-size:0.85rem'>No trades found. Log your first trade in the Log Trade tab.</div>", unsafe_allow_html=True)
+        st.markdown("<div style='color:#7777aa;padding:2rem;text-align:center;font-size:0.85rem'>No trades found. Log your first trade in the Log Trade tab.</div>", unsafe_allow_html=True)
 
 
 def _render_tradovate_fills():

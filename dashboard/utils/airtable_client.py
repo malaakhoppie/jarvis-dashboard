@@ -168,8 +168,51 @@ def get_pattern_flags() -> list[dict]:
     ]
 
 
+def _delete(table_key: str, record_id: str) -> bool:
+    url = f"{_BASE_URL}/{_TABLES[table_key]}/{record_id}"
+    try:
+        r = requests.delete(url, headers=_headers(), timeout=10)
+        if r.status_code == 200:
+            st.cache_data.clear()
+            return True
+        return False
+    except Exception:
+        return False
+
+
+def _delete_many(table_key: str, record_ids: list[str]) -> tuple[int, int]:
+    """Delete up to 50 records per request (Airtable limit)."""
+    ok = fail = 0
+    for i in range(0, len(record_ids), 10):
+        batch = record_ids[i:i + 10]
+        params = "&".join(f"records[]={rid}" for rid in batch)
+        url = f"{_BASE_URL}/{_TABLES[table_key]}?{params}"
+        try:
+            r = requests.delete(url, headers=_headers(), timeout=10)
+            if r.status_code == 200:
+                ok += len(batch)
+                st.cache_data.clear()
+            else:
+                fail += len(batch)
+        except Exception:
+            fail += len(batch)
+    return ok, fail
+
+
 def create_trade(fields: dict) -> bool:
     return _post("trades", fields)
+
+
+def delete_trade(record_id: str) -> bool:
+    return _delete("trades", record_id)
+
+
+def delete_trades(record_ids: list[str]) -> tuple[int, int]:
+    return _delete_many("trades", record_ids)
+
+
+def delete_daily_summary(record_id: str) -> bool:
+    return _delete("daily_summary", record_id)
 
 
 def create_daily_summary(fields: dict) -> bool:
