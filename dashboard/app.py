@@ -5,6 +5,10 @@ sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import streamlit as st
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+_EST = ZoneInfo("America/New_York")
 
 st.set_page_config(
     page_title="Jarvis — Trading Intelligence",
@@ -359,17 +363,28 @@ except Exception:
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("""
-    <div style='padding:0.2rem 0 1.2rem'>
-      <div style='display:flex;align-items:center;gap:0.6rem;margin-bottom:0.3rem'>
-        <span style='font-size:1.3rem;filter:drop-shadow(0 0 6px #f0b429)'>⚡</span>
-        <span style='color:#f0f0f8;font-size:1.2rem;font-weight:700;
-                     letter-spacing:0.05em;text-shadow:0 0 12px rgba(240,180,41,0.3)'>JARVIS</span>
-      </div>
-      <div style='color:#252548;font-size:0.78rem;letter-spacing:0.18em;text-transform:uppercase'>Trading Intelligence</div>
-      <div style='margin-top:0.6rem;height:1px;background:linear-gradient(90deg,#f0b42944,transparent)'></div>
-    </div>
-    """, unsafe_allow_html=True)
+    _now_sb = datetime.now(_EST)
+    st.markdown(
+        f"<div style='padding:0.2rem 0 1rem'>"
+        f"<div style='display:flex;align-items:center;gap:0.6rem;margin-bottom:0.25rem'>"
+        f"<span style='font-size:1.3rem;filter:drop-shadow(0 0 6px #f0b429)'>⚡</span>"
+        f"<span style='color:#f0f0f8;font-size:1.2rem;font-weight:700;"
+        f"letter-spacing:0.05em;text-shadow:0 0 12px rgba(240,180,41,0.3)'>JARVIS</span>"
+        f"</div>"
+        f"<div style='color:#6666aa;font-size:0.72rem;letter-spacing:0.18em;"
+        f"text-transform:uppercase;margin-bottom:0.5rem'>Trading Intelligence</div>"
+        f"<div style='display:flex;align-items:baseline;gap:0.45rem;margin-bottom:0.5rem'>"
+        f"<span style='color:#f0f0f8;font-size:1.25rem;font-weight:700;"
+        f"font-family:JetBrains Mono,monospace;letter-spacing:0.02em'>"
+        f"{_now_sb.strftime('%H:%M')}</span>"
+        f"<span style='color:#f0b429;font-size:0.7rem;font-weight:700;"
+        f"letter-spacing:0.1em'>EST</span>"
+        f"<span style='color:#555577;font-size:0.7rem'>{_now_sb.strftime('%a %b %d')}</span>"
+        f"</div>"
+        f"<div style='height:1px;background:linear-gradient(90deg,#f0b42944,transparent)'></div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
 
     st.divider()
 

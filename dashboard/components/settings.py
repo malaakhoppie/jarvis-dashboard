@@ -265,6 +265,22 @@ def render_settings():
 
     st.divider()
 
+    # ── Time ──────────────────────────────────────────────────────────────────
+    st.markdown("#### Time & Clock")
+    st.markdown(
+        "<div style='background:#0a0a18;border:1px solid #1a1a2e;border-radius:8px;"
+        "padding:0.8rem 1rem;margin-bottom:0.5rem'>"
+        "<div style='color:#f0f0f8;font-size:0.88rem;font-weight:600;margin-bottom:0.2rem'>"
+        "EST (America/New_York) · 24-hour</div>"
+        "<div style='color:#8888aa;font-size:0.82rem'>"
+        "All times are locked to Eastern Standard Time in 24-hour format. "
+        "This is not configurable — the dashboard is built for NYC/EST trading sessions.</div>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    st.divider()
+
     # ── App Preferences ───────────────────────────────────────────────────────
     st.markdown("#### App Preferences")
 
