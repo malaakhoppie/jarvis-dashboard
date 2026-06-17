@@ -11,14 +11,22 @@ from zoneinfo import ZoneInfo
 ROOT = Path(__file__).parent.parent.parent
 load_dotenv(ROOT / "config" / "config.env")
 
-_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+
+def _secret(key: str, default: str = "") -> str:
+    try:
+        return st.secrets[key]
+    except Exception:
+        return os.getenv(key, default)
+
+
+_API_KEY = _secret("ANTHROPIC_API_KEY")
 EST = ZoneInfo("America/New_York")
 
 # Kill zones (name, start_h, start_m, end_h, end_m, color)
 KILL_ZONES = [
-    ("London KZ",   2,  0,  5,  0, "#00d4ff"),
-    ("NY KZ",       7,  0, 12,  0, "#00e676"),
-    ("3PM Window", 15,  0, 16, 30, "#f0b429"),
+    ("London KZ",        2,  0,  5,  0, "#00d4ff"),
+    ("NY KZ",            7,  0, 12,  0, "#00e676"),
+    ("Afternoon NY KZ", 15,  0, 16, 30, "#f0b429"),
 ]
 
 
@@ -130,29 +138,46 @@ def _render_kill_zones():
 
         if is_on:
             mins_left = end - cur
-            badge     = f"{mins_left}m left"
-            alpha     = "22"
-            txt_col   = color
+            hh, mm    = divmod(mins_left, 60)
+            badge     = f"{hh}h {mm}m left" if hh else f"{mm}m left"
+            bg        = color
+            txt_col   = "#060608"
+            name_col  = "#060608"
+            border    = f"2px solid {color}"
+            badge_bg  = "rgba(0,0,0,0.18)"
+            badge_col = "#060608"
+            pulse_dot = (
+                f"<div style='width:7px;height:7px;border-radius:50%;background:#060608;"
+                f"box-shadow:0 0 6px rgba(0,0,0,0.4);animation:pulse 2s infinite;"
+                f"flex-shrink:0'></div>"
+            )
         else:
             if cur < start:
                 mins_to = start - cur
             else:
                 mins_to = (24 * 60 - cur) + start
-            hh, mm = divmod(mins_to, 60)
-            badge  = f"in {hh}h {mm}m" if hh else f"in {mm}m"
-            alpha  = "0a"
-            txt_col = "#6666aa"
+            hh, mm    = divmod(mins_to, 60)
+            badge     = f"in {hh}h {mm}m" if hh else f"in {mm}m"
+            bg        = f"{color}0d"
+            txt_col   = "#6666aa"
+            name_col  = color
+            border    = f"1px solid {color}33"
+            badge_bg  = f"{color}22"
+            badge_col = color
+            pulse_dot = ""
 
-        border   = f"2px solid {color}" if is_on else f"1px solid {color}33"
         time_str = f"{sh:02d}:{sm:02d}–{eh:02d}:{em:02d} ET"
 
         pills += (
-            f"<div style='background:{color}{alpha};border:{border};border-radius:10px;"
+            f"<div style='background:{bg};border:{border};border-radius:10px;"
             f"padding:0.65rem 1rem;flex:1;min-width:140px'>"
             f"<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:0.25rem'>"
-            f"<span style='color:{color};font-size:0.65rem;font-weight:700;"
+            f"<div style='display:flex;align-items:center;gap:0.4rem'>"
+            f"{pulse_dot}"
+            f"<span style='color:{name_col};font-size:0.65rem;font-weight:700;"
             f"text-transform:uppercase;letter-spacing:0.08em'>{kz_name}</span>"
-            f"<span style='background:{color}22;color:{color};font-size:0.6rem;"
+            f"</div>"
+            f"<span style='background:{badge_bg};color:{badge_col};font-size:0.6rem;"
             f"font-weight:700;padding:1px 6px;border-radius:4px'>{'LIVE' if is_on else badge}</span>"
             f"</div>"
             f"<div style='color:{txt_col};font-size:0.72rem;"
