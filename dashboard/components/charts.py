@@ -173,7 +173,9 @@ def render_charts():
         ))
 
     # ── Trade overlays ────────────────────────────────────────────────────────
-    plotted = []
+    plotted     = []
+    no_price_ct = 0
+    trade_err   = ""
     try:
         from utils.airtable_client import get_trades
         d_int = {"Today": 1, "7 days": 7, "30 days": 30, "All": 90}[days_back]
@@ -185,14 +187,19 @@ def render_charts():
         ]
 
         for trade in sym_trades:
-            ep = trade.get("entry")
-            xp = trade.get("exit")
-            if not ep or not xp:
+            raw_ep = trade.get("entry")
+            raw_xp = trade.get("exit")
+            if not raw_ep or not raw_xp:
+                no_price_ct += 1
+                continue
+            try:
+                ep = float(raw_ep)
+                xp = float(raw_xp)
+            except (TypeError, ValueError):
+                no_price_ct += 1
                 continue
 
-            ep  = float(ep)
-            xp  = float(xp)
-            pnl = float(trade.get("pnl") or 0)
+            pnl  = float(trade.get("pnl") or 0)
             dir_ = (trade.get("direction") or "Long").strip()
             dur  = trade.get("duration")
             sess = trade.get("session") or "—"
@@ -201,6 +208,7 @@ def render_charts():
 
             entry_dt = _parse_dt(trade.get("date") or "")
             if entry_dt is None:
+                no_price_ct += 1
                 continue
 
             exit_dt = (
@@ -208,66 +216,52 @@ def render_charts():
                 if dur else entry_dt + timedelta(hours=1)
             )
 
-            x_e = _nearest_ts(entry_dt, ts)
-            x_x = _nearest_ts(exit_dt, ts)
-
-            win = pnl >= 0
-            lc  = "#00e676" if win else "#ff4444"
+            x_e  = _nearest_ts(entry_dt, ts)
+            x_x  = _nearest_ts(exit_dt,  ts)
+            win  = pnl >= 0
+            lc   = "#00e676" if win else "#ff4444"
             esym = "triangle-up" if dir_ == "Long" else "triangle-down"
             sign = "+" if win else ""
 
             _add(go.Scatter(
-                x=[x_e, x_x], y=[ep, xp],
-                mode="lines",
+                x=[x_e, x_x], y=[ep, xp], mode="lines",
                 line=dict(color=lc, width=2, dash="dot"),
                 showlegend=False, hoverinfo="skip",
             ))
-
             _add(go.Scatter(
-                x=[x_e], y=[ep],
-                mode="markers",
+                x=[x_e], y=[ep], mode="markers",
                 marker=dict(symbol=esym, size=15, color="#00cfff",
                             line=dict(color="#f0f0f8", width=1.2)),
                 showlegend=False,
                 hovertemplate=(
-                    f"<b>ENTRY — {dir_}</b><br>"
-                    f"Price: {ep:,.2f}<br>"
-                    f"Session: {sess}<br>"
-                    f"Contracts: {cont}"
+                    f"<b>ENTRY — {dir_}</b><br>Price: {ep:,.2f}<br>"
+                    f"Session: {sess}<br>Contracts: {cont}"
                     + (f"<br>Rule score: {rsco}/8" if rsco else "")
                     + "<extra></extra>"
                 ),
             ))
-
             _add(go.Scatter(
-                x=[x_x], y=[xp],
-                mode="markers",
+                x=[x_x], y=[xp], mode="markers",
                 marker=dict(symbol="circle", size=11, color=lc,
                             line=dict(color="#f0f0f8", width=1.2)),
                 showlegend=False,
                 hovertemplate=(
-                    f"<b>EXIT</b><br>"
-                    f"Price: {xp:,.2f}<br>"
-                    f"PnL: {sign}${pnl:,.2f}"
+                    f"<b>EXIT</b><br>Price: {xp:,.2f}<br>PnL: {sign}${pnl:,.2f}"
                     + (f"<br>Duration: {dur}m" if dur else "")
                     + "<extra></extra>"
                 ),
             ))
-
             fig.add_annotation(
                 x=x_e, y=(ep + xp) / 2,
                 text=f"{sign}${pnl:,.0f}",
                 font=dict(color=lc, size=10, family="JetBrains Mono, monospace"),
-                showarrow=False,
-                bgcolor="#09090f", bordercolor=lc,
-                borderwidth=1, borderpad=3,
-                xanchor="left", xshift=20, opacity=0.95,
+                showarrow=False, bgcolor="#09090f", bordercolor=lc,
+                borderwidth=1, borderpad=3, xanchor="left", xshift=20, opacity=0.95,
             )
-
             plotted.append(trade)
 
-    except Exception:
-        pass
+    except Exception as e:
+        trade_err = str(e)
 
     # ── Legend note ────────────────────────────────────────────────────────────
     fig.add_annotation(
@@ -327,11 +321,25 @@ def render_charts():
     if plotted:
         _render_trade_table(plotted)
     else:
-        st.markdown(
-            "<div style='color:#5555aa;font-size:0.8rem;margin-top:0.5rem'>"
-            "No trades found for this symbol in the selected window.</div>",
-            unsafe_allow_html=True,
-        )
+        if trade_err:
+            st.markdown(
+                f"<div style='color:#ff6b6b;font-size:0.78rem;margin-top:0.5rem'>"
+                f"Trade overlay error: {trade_err}</div>",
+                unsafe_allow_html=True,
+            )
+        elif no_price_ct:
+            st.markdown(
+                f"<div style='color:#f0b429;font-size:0.78rem;margin-top:0.5rem'>"
+                f"{no_price_ct} {symbol} trade(s) found but missing Entry Price / Exit Price — "
+                f"add those fields in the Trade Log to show them on the chart.</div>",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                "<div style='color:#5555aa;font-size:0.8rem;margin-top:0.5rem'>"
+                "No trades logged for this symbol in the selected window.</div>",
+                unsafe_allow_html=True,
+            )
 
 
 def _render_market_banner():

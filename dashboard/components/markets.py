@@ -89,16 +89,29 @@ def _render_session_clock():
             is_on = current_mins >= start or current_mins < end
         else:
             is_on = start <= current_mins < end
-        alpha  = "ff" if is_on else "22"
-        border = f"2px solid {s_color}" if is_on else f"1px solid {s_color}22"
+        bg       = s_color if is_on else f"{s_color}18"
+        border   = f"2px solid {s_color}" if is_on else f"1px solid {s_color}28"
+        txt      = "#060608" if is_on else s_color
+        sub_txt  = "rgba(0,0,0,0.55)" if is_on else f"{s_color}88"
+        time_str = f"{sh:02d}:{sm:02d}–{eh:02d}:{em:02d} ET"
+        live_badge = (
+            f"<span style='background:rgba(0,0,0,0.18);color:#060608;font-size:0.55rem;"
+            f"font-weight:800;padding:1px 5px;border-radius:3px;margin-left:0.3rem;"
+            f"letter-spacing:0.08em'>LIVE</span>"
+        ) if is_on else ""
+        pulse_dot = (
+            f"<span style='display:inline-block;width:5px;height:5px;border-radius:50%;"
+            f"background:#060608;margin-right:0.3rem;vertical-align:middle;"
+            f"animation:pulse 2s infinite'></span>"
+        ) if is_on else ""
         session_pills += (
-            f"<div style='background:{s_color}{alpha};border:{border};border-radius:8px;"
-            f"padding:0.4rem 0.9rem;text-align:center;min-width:90px'>"
-            f"<div style='color:{'#060608' if is_on else s_color};font-size:0.65rem;"
-            f"font-weight:700;letter-spacing:0.08em;text-transform:uppercase'>{s_name}</div>"
-            f"<div style='color:{'#060608' if is_on else s_color+'88'};font-size:0.7rem;"
-            f"font-family:JetBrains Mono,monospace'>"
-            f"{'LIVE' if is_on else f'{sh:02d}:{sm:02d}–{eh:02d}:{em:02d}'} ET</div>"
+            f"<div style='background:{bg};border:{border};border-radius:8px;"
+            f"padding:0.45rem 0.9rem;text-align:center;min-width:100px'>"
+            f"<div style='color:{txt};font-size:0.65rem;font-weight:700;"
+            f"letter-spacing:0.08em;text-transform:uppercase;margin-bottom:0.15rem'>"
+            f"{pulse_dot}{s_name}{live_badge}</div>"
+            f"<div style='color:{sub_txt};font-size:0.68rem;"
+            f"font-family:JetBrains Mono,monospace'>{time_str}</div>"
             f"</div>"
         )
 
