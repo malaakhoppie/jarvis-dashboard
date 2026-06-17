@@ -121,48 +121,48 @@ def render_overview():
     </div>""", unsafe_allow_html=True)
 
     # ── KPI strip ─────────────────────────────────────────────────────────────
-    k1, k2, k3, k4, k5, k6 = st.columns(6)
     bal_col   = "#00e676" if gained >= 0 else "#ff4444"
     pnl_col   = "#00e676" if today_pnl >= 0 else "#ff4444"
     ddl_col   = "#ff4444" if ddl_hit else "#00e676"
     grade_col = {"A":"#00e676","B":"#00d4ff","C":"#f0b429","D":"#ff6b35","F":"#ff4444"}.get(day_grade,"#8888aa")
-
-    with k1: st.markdown(_kpi("Eval Balance", f"${curr_bal:,.0f}",
-        f"{'+' if gained>=0 else ''}{gained:,.0f}  ({tgt_pct:.0f}% to target)", bal_col,
-        accent=bal_col), unsafe_allow_html=True)
-    with k2:
-        bar_c = min(tgt_pct, 100)
-        b_col = "#00e676" if tgt_pct >= 100 else "#f0b429"
-        st.markdown(f"""<div style='background:#09090f;border:1px solid #1a1a2e;border-radius:10px;
-            padding:1rem 1.1rem;position:relative;overflow:hidden;height:100%'>
-          <div style='position:absolute;top:0;left:0;width:3px;bottom:0;
-                      background:#f0b429;opacity:0.7;border-radius:2px 0 0 2px'></div>
-          <div style='color:#6666aa;font-size:0.62rem;text-transform:uppercase;
-                      letter-spacing:0.13em;margin-bottom:0.4rem;padding-left:0.2rem'>Progress</div>
-          <div style='color:#f0f0f8;font-size:1.45rem;font-weight:700;
-                      font-family:JetBrains Mono,monospace;line-height:1;padding-left:0.2rem'>{tgt_pct:.0f}%</div>
-          <div style='background:#13132a;border-radius:999px;height:4px;margin:0.5rem 0.2rem 0.3rem'>
-            <div style='background:linear-gradient(90deg,{b_col}88,{b_col});width:{bar_c:.0f}%;
-                        height:4px;border-radius:999px'></div></div>
-          <div style='color:#8888aa;font-size:0.72rem;padding-left:0.2rem'>
-            ${profit_tgt-gained:,.0f} remaining</div>
-        </div>""", unsafe_allow_html=True)
-    with k3: st.markdown(_kpi("Today PnL", f"{'+' if today_pnl>=0 else ''}${today_pnl:,.2f}",
-        f"{today_wins}W / {today_losses}L  ·  {today_wr:.0f}% WR", pnl_col, accent=pnl_col),
-        unsafe_allow_html=True)
-    with k4: st.markdown(_kpi("DDL", "HIT" if ddl_hit else "CLEAR",
-        f"${ddl:,.0f}/day limit", ddl_col, accent=ddl_col), unsafe_allow_html=True)
-    with k5: st.markdown(_kpi("Day Grade", day_grade,
-        f"Eval Day {days_on}", grade_col, accent=grade_col), unsafe_allow_html=True)
-
-    # All-time stats
-    total_pnl  = sum(t.get("pnl",0) or 0 for t in trades)
-    total_wins  = sum(1 for t in trades if t.get("result")=="Win")
+    bar_c     = min(tgt_pct, 100)
+    b_col     = "#00e676" if tgt_pct >= 100 else "#f0b429"
+    total_pnl    = sum(t.get("pnl",0) or 0 for t in trades)
+    total_wins   = sum(1 for t in trades if t.get("result")=="Win")
     total_trades = len(trades)
-    wr_all  = total_wins/total_trades*100 if total_trades else 0
-    with k6: st.markdown(_kpi("30d PnL", f"{'+' if total_pnl>=0 else ''}${total_pnl:,.0f}",
-        f"{wr_all:.0f}% WR  ·  {total_trades} trades",
-        "#00e676" if total_pnl>=0 else "#ff4444"), unsafe_allow_html=True)
+    wr_all       = total_wins/total_trades*100 if total_trades else 0
+
+    _prog_card = (
+        f"<div style='background:#09090f;border:1px solid #1a1a2e;border-radius:10px;"
+        f"padding:1rem 1.1rem;position:relative;overflow:hidden'>"
+        f"<div style='position:absolute;top:0;left:0;width:3px;bottom:0;"
+        f"background:#f0b429;opacity:0.7;border-radius:2px 0 0 2px'></div>"
+        f"<div style='color:#6666aa;font-size:0.62rem;text-transform:uppercase;"
+        f"letter-spacing:0.13em;margin-bottom:0.4rem;padding-left:0.2rem'>Progress</div>"
+        f"<div style='color:#f0f0f8;font-size:1.45rem;font-weight:700;"
+        f"font-family:JetBrains Mono,monospace;line-height:1;padding-left:0.2rem'>{tgt_pct:.0f}%</div>"
+        f"<div style='background:#13132a;border-radius:999px;height:4px;margin:0.5rem 0.2rem 0.3rem'>"
+        f"<div style='background:linear-gradient(90deg,{b_col}88,{b_col});width:{bar_c:.0f}%;"
+        f"height:4px;border-radius:999px'></div></div>"
+        f"<div style='color:#8888aa;font-size:0.72rem;padding-left:0.2rem'>${profit_tgt-gained:,.0f} remaining</div>"
+        f"</div>"
+    )
+
+    st.markdown(
+        "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));"
+        "gap:0.6rem;margin-bottom:0.8rem'>"
+        + _kpi("Eval Balance", f"${curr_bal:,.0f}",
+               f"{'+' if gained>=0 else ''}{gained:,.0f}  ({tgt_pct:.0f}% to target)", bal_col, accent=bal_col)
+        + _prog_card
+        + _kpi("Today PnL", f"{'+' if today_pnl>=0 else ''}${today_pnl:,.2f}",
+               f"{today_wins}W / {today_losses}L  ·  {today_wr:.0f}% WR", pnl_col, accent=pnl_col)
+        + _kpi("DDL", "HIT" if ddl_hit else "CLEAR", f"${ddl:,.0f}/day limit", ddl_col, accent=ddl_col)
+        + _kpi("Day Grade", day_grade, f"Eval Day {days_on}", grade_col, accent=grade_col)
+        + _kpi("30d PnL", f"{'+' if total_pnl>=0 else ''}${total_pnl:,.0f}",
+               f"{wr_all:.0f}% WR  ·  {total_trades} trades", "#00e676" if total_pnl>=0 else "#ff4444")
+        + "</div>",
+        unsafe_allow_html=True,
+    )
 
     st.markdown("<div style='height:0.6rem'></div>", unsafe_allow_html=True)
 
@@ -256,9 +256,7 @@ def render_overview():
         else:
             _empty(220, "ov_7day_empty")
 
-    # ── Gauge row ─────────────────────────────────────────────────────────────
-    g1, g2, g3 = st.columns(3)
-
+    # ── Stats row ─────────────────────────────────────────────────────────────
     wins_all  = [t for t in trades if t.get("result")=="Win"]
     loss_all  = [t for t in trades if t.get("result")=="Loss"]
     wr_v      = len(wins_all)/len(trades)*100 if trades else 0
@@ -268,9 +266,42 @@ def render_overview():
     rule_sc   = [t["rule_score"] for t in trades if t.get("rule_score") is not None]
     avg_rule  = sum(rule_sc)/len(rule_sc) if rule_sc else 0
 
-    _gauge(g1, wr_v,   0, 100, "#f0b429", "Win Rate %",      "%",  "ov_wr",   60)
-    _gauge(g2, rr_v,   0, 5,   "#00d4ff", "Avg R:R (30d)",   "R",  "ov_rr",   2.0)
-    _gauge(g3, avg_rule,0, 8,  "#a78bfa", "Rule Score (30d)","/8", "ov_rule", 6.0)
+    wr_col   = "#00e676" if wr_v >= 60 else ("#f0b429" if wr_v >= 40 else "#ff4444")
+    rr_col   = "#00e676" if rr_v >= 2  else ("#f0b429" if rr_v >= 1  else "#ff4444")
+    rule_col = "#00e676" if avg_rule >= 6 else ("#f0b429" if avg_rule >= 4 else "#ff4444")
+
+    st.markdown(
+        f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0.6rem'>"
+        f"<div style='background:#09090f;border:1px solid #1a1a2e;border-radius:12px;padding:1.1rem 1.2rem'>"
+        f"<div style='color:#f0b429;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.12em;"
+        f"margin-bottom:0.4rem;font-weight:700'>Win Rate (30d)</div>"
+        f"<div style='color:{wr_col};font-size:2rem;font-weight:700;font-family:JetBrains Mono,monospace;line-height:1'>"
+        f"{wr_v:.0f}<span style='font-size:1rem;opacity:0.7'>%</span></div>"
+        f"<div style='background:#13132a;border-radius:999px;height:4px;margin:0.5rem 0 0.3rem'>"
+        f"<div style='background:{wr_col};width:{min(wr_v,100):.0f}%;height:4px;border-radius:999px'></div></div>"
+        f"<div style='color:#6666aa;font-size:0.7rem'>{len(trades)} trades · {len(wins_all)}W / {len(loss_all)}L</div>"
+        f"</div>"
+        f"<div style='background:#09090f;border:1px solid #1a1a2e;border-radius:12px;padding:1.1rem 1.2rem'>"
+        f"<div style='color:#00d4ff;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.12em;"
+        f"margin-bottom:0.4rem;font-weight:700'>Avg Risk : Reward (30d)</div>"
+        f"<div style='color:{rr_col};font-size:2rem;font-weight:700;font-family:JetBrains Mono,monospace;line-height:1'>"
+        f"{rr_v:.2f}<span style='font-size:1rem;opacity:0.7'>R</span></div>"
+        f"<div style='background:#13132a;border-radius:999px;height:4px;margin:0.5rem 0 0.3rem'>"
+        f"<div style='background:{rr_col};width:{min(rr_v/5*100,100):.0f}%;height:4px;border-radius:999px'></div></div>"
+        f"<div style='color:#6666aa;font-size:0.7rem'>target 2.0R+ · avg win ${avg_win:,.0f}</div>"
+        f"</div>"
+        f"<div style='background:#09090f;border:1px solid #1a1a2e;border-radius:12px;padding:1.1rem 1.2rem'>"
+        f"<div style='color:#a78bfa;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.12em;"
+        f"margin-bottom:0.4rem;font-weight:700'>Rules Followed (0–8)</div>"
+        f"<div style='color:{rule_col};font-size:2rem;font-weight:700;font-family:JetBrains Mono,monospace;line-height:1'>"
+        f"{avg_rule:.1f}<span style='font-size:1rem;opacity:0.7'>/8</span></div>"
+        f"<div style='background:#13132a;border-radius:999px;height:4px;margin:0.5rem 0 0.3rem'>"
+        f"<div style='background:{rule_col};width:{avg_rule/8*100:.0f}%;height:4px;border-radius:999px'></div></div>"
+        f"<div style='color:#6666aa;font-size:0.7rem'>follow the process — target 6/8+</div>"
+        f"</div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
 
     st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
 
@@ -305,6 +336,9 @@ def render_overview():
         _7day_table(summaries)
 
     st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
+
+    # ── Session Clock ─────────────────────────────────────────────────────────
+    _render_session_clock_mini()
 
     # ── Today's Session ───────────────────────────────────────────────────────
     _render_session_trades(trades)
@@ -358,7 +392,7 @@ def _render_week_strip(trades, summaries, start_bal, ddl, today_pnl, ddl_hit):
     worst_col = "#ff4444" if worst_day < 0 else "#00e676"
 
     st.markdown(
-        f"<div style='display:grid;grid-template-columns:1fr 1fr 1fr 1fr 2fr;gap:0.6rem;align-items:stretch'>"
+        f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:0.6rem;align-items:stretch'>"
         f"<div style='background:#09090f;border:1px solid #1a1a2e;border-radius:10px;padding:0.7rem 0.9rem'>"
         f"<div style='color:#6666aa;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.25rem'>This Week</div>"
         f"<div style='color:{week_col};font-size:1.1rem;font-weight:700;font-family:JetBrains Mono,monospace'>{'+' if week_pnl>=0 else ''}${week_pnl:,.2f}</div>"
@@ -392,6 +426,49 @@ def _render_week_strip(trades, summaries, start_bal, ddl, today_pnl, ddl_hit):
         f"<div style='color:#8888aa;font-size:0.7rem'>{'🛑 CLOSE THE LAPTOP — DDL HIT' if ddl_hit else f'{100-ddl_pct:.0f}% remaining · ${ddl - loss_today:,.2f} left'}</div>"
         f"</div>"
         f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _render_session_clock_mini():
+    """Session pills: Asia / London / NY with full time ranges."""
+    try:
+        from utils.market_client import SESSIONS
+    except Exception:
+        return
+    now = datetime.now(EST)
+    cur = now.hour * 60 + now.minute
+    pills = ""
+    for s_name, (sh, sm), (eh, em), s_color in SESSIONS:
+        start = sh * 60 + sm
+        end   = eh * 60 + em
+        is_on = (cur >= start or cur < end) if s_name == "Asia" else (start <= cur < end)
+        bg     = s_color if is_on else f"{s_color}18"
+        border = f"2px solid {s_color}" if is_on else f"1px solid {s_color}28"
+        txt    = "#060608" if is_on else s_color
+        sub    = "rgba(0,0,0,0.55)" if is_on else f"{s_color}88"
+        pulse  = (
+            f"<span style='display:inline-block;width:6px;height:6px;border-radius:50%;"
+            f"background:#060608;margin-right:0.3rem;vertical-align:middle;"
+            f"animation:pulse 2s infinite'></span>"
+        ) if is_on else ""
+        live = (
+            f"<span style='background:rgba(0,0,0,0.2);color:#060608;font-size:0.55rem;"
+            f"font-weight:800;padding:1px 5px;border-radius:3px;margin-left:0.3rem;"
+            f"letter-spacing:0.08em'>LIVE</span>"
+        ) if is_on else ""
+        pills += (
+            f"<div style='background:{bg};border:{border};border-radius:8px;"
+            f"padding:0.5rem 0.9rem;text-align:center;flex:1;min-width:90px'>"
+            f"<div style='color:{txt};font-size:0.65rem;font-weight:700;"
+            f"letter-spacing:0.08em;text-transform:uppercase;margin-bottom:0.15rem'>"
+            f"{pulse}{s_name}{live}</div>"
+            f"<div style='color:{sub};font-size:0.68rem;"
+            f"font-family:JetBrains Mono,monospace'>{sh:02d}:{sm:02d}–{eh:02d}:{em:02d} ET</div>"
+            f"</div>"
+        )
+    st.markdown(
+        f"<div style='display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem'>{pills}</div>",
         unsafe_allow_html=True,
     )
 

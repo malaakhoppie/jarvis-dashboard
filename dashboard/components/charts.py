@@ -286,7 +286,7 @@ def render_charts():
         hoverlabel=dict(bgcolor="#0c0c1a", bordercolor="#252548",
                         font=dict(color="#f0f0f8", size=11)),
         margin=dict(l=8, r=8, t=28, b=8),
-        height=580 if show_vol else 500,
+        height=460 if show_vol else 380,
     )
     AX = dict(
         gridcolor="#13132a", linecolor="#1a1a30",

@@ -332,6 +332,12 @@ st.markdown("""
     border-radius: 10px !important;
   }
   [data-testid="stFileUploader"]:hover { border-color: var(--gold-dim) !important; }
+
+  /* ── Mobile ── */
+  @media (max-width: 640px) {
+    .main .block-container { padding: 0.8rem 0.6rem 2rem !important; }
+    .stMetric { font-size: 0.85rem !important; }
+  }
 </style>
 """, unsafe_allow_html=True)
 

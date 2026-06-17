@@ -9,6 +9,11 @@ from datetime import date
 
 ROOT = Path(__file__).parent.parent.parent
 
+
+def _is_cloud() -> bool:
+    return not (ROOT / "config" / "config.env").exists()
+
+
 ACCOUNT_TYPES   = ["eval", "funded", "live", "demo", "paper"]
 CHALLENGE_TYPES = ["n/a", "1-step", "2-step", "instant"]
 ASSET_CLASSES   = ["Futures", "Forex", "Stocks", "Crypto", "Options"]
@@ -24,9 +29,18 @@ def _md(html: str):
 
 
 def _load_accounts() -> list[dict]:
+    if "accounts_json_override" in st.session_state:
+        return st.session_state["accounts_json_override"]
     path = ROOT / "config" / "accounts.json"
     if path.exists():
         return json.loads(path.read_text()).get("accounts", [])
+    try:
+        raw = st.secrets.get("ACCOUNTS_JSON", "")
+        if raw:
+            data = json.loads(raw)
+            return data if isinstance(data, list) else data.get("accounts", [])
+    except Exception:
+        pass
     return []
 
 
@@ -37,7 +51,7 @@ def _save_accounts(accounts: list[dict]):
         existing["accounts"] = accounts
         path.write_text(json.dumps(existing, indent=2))
     except (OSError, PermissionError):
-        st.warning("Running on Streamlit Cloud — account edits are not persisted. Update accounts.json locally and redeploy.")
+        st.session_state["accounts_json_override"] = accounts
 
 
 def _replace_account(updated: dict, all_accounts: list[dict]) -> list[dict]:
@@ -148,6 +162,28 @@ def render_accounts():
     st.markdown("## Accounts")
     accounts = _load_accounts()
 
+    if not accounts and _is_cloud():
+        st.markdown(
+            "<div style='background:#0a0a18;border:1px solid #f0b42944;border-radius:10px;"
+            "padding:1rem 1.2rem;margin-bottom:1rem'>"
+            "<div style='color:#f0b429;font-size:0.88rem;font-weight:600;margin-bottom:0.4rem'>"
+            "Cloud mode — accounts.json not found</div>"
+            "<div style='color:#8888aa;font-size:0.82rem;line-height:1.6'>"
+            "Upload your local <code>config/accounts.json</code> below (lasts this session), "
+            "or add <b>ACCOUNTS_JSON</b> to Streamlit Secrets for permanent access.</div></div>",
+            unsafe_allow_html=True,
+        )
+        uploaded = st.file_uploader("Upload accounts.json", type=["json"], key="acct_upload")
+        if uploaded:
+            try:
+                data = json.loads(uploaded.read())
+                accts = data if isinstance(data, list) else data.get("accounts", [])
+                st.session_state["accounts_json_override"] = accts
+                st.rerun()
+            except Exception as e:
+                st.error(f"Could not parse accounts.json: {e}")
+        return
+
     if not accounts:
         _md("""
         <div style='background:#0c0c14;border:1px solid #1a1a2e;border-radius:10px;
@@ -251,7 +287,7 @@ def _render_account_card(acct: dict, all_accounts: list[dict]):
                        font-size:0.8rem;font-weight:700;letter-spacing:0.05em;white-space:nowrap'>{status_label}</span>
         </div>
       </div>
-      <div style='display:grid;grid-template-columns:repeat(6,1fr);gap:1rem;margin-bottom:1.1rem'>
+      <div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:0.8rem;margin-bottom:1.1rem'>
         <div style='background:#0a0a18;border-radius:10px;padding:0.8rem;border:1px solid #1a1a30'>
           <div style='color:#6666aa;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.3rem'>Balance</div>
           <div style='color:#f0f0f8;font-size:1.25rem;font-weight:700;font-family:JetBrains Mono,monospace'>${curr_bal:,.2f}</div>
