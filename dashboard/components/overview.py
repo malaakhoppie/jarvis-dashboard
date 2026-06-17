@@ -189,49 +189,90 @@ def render_overview():
         st.markdown("<div style='color:#6666aa;font-size:0.62rem;text-transform:uppercase;"
                     "letter-spacing:0.13em;margin-bottom:0.5rem'>Equity Curve</div>",
                     unsafe_allow_html=True)
+
+        # Always start curve from eval start date at starting balance
+        ec_start = cfg.get("start_date") or cfg.get("first_trade_date") or str(date.today())
+        eq_map: dict[str, float] = {ec_start: start_bal}
+
         if summaries:
             ss = sorted(summaries, key=lambda x: x.get("date") or "")
-            dates, bals, running = [], [], start_bal
+            # Use eval_balance directly when available (actual balance), else accumulate PnL
+            has_bal = any(s.get("eval_balance") for s in ss)
+            running = start_bal
             for s in ss:
-                running += s.get("pnl",0) or 0
-                dates.append(s.get("date",""))
-                bals.append(running)
+                d = s.get("date", "")
+                if not d:
+                    continue
+                if has_bal:
+                    b = s.get("eval_balance") or 0
+                    if b > 0:
+                        eq_map[d] = b
+                else:
+                    running += s.get("pnl", 0) or 0
+                    eq_map[d] = running
         elif trades:
             ts = sorted(trades, key=lambda x: str(x.get("date") or ""))
-            dates, bals, running = [], [], start_bal
+            running = start_bal
             for t in ts:
-                running += t.get("pnl",0) or 0
-                dates.append(str(t.get("date",""))[:10])
-                bals.append(running)
-        else:
-            dates, bals = [], []
+                d = str(t.get("date", ""))[:10]
+                running += t.get("pnl", 0) or 0
+                eq_map[d] = running
 
-        if dates:
-            tgt_line  = [start_bal + profit_tgt] * len(dates)
+        eq_entries = sorted(eq_map.items())
+        eq_dates   = [e[0] for e in eq_entries]
+        eq_bals    = [e[1] for e in eq_entries]
 
+        if eq_dates:
+            tgt_line  = [start_bal + profit_tgt] * len(eq_dates)
             trail_amt = cfg.get("max_trailing_drawdown", 1000)
             mll_vals, running_max = [], start_bal
-            for b in bals:
+            for b in eq_bals:
                 running_max = max(running_max, b)
                 mll_vals.append(min(running_max - trail_amt, start_bal))
 
+            # Tight y-axis — show the detail, not a chart from $0
+            pad    = max((max(eq_bals) - min(eq_bals)) * 0.15, 50)
+            y_min  = min(min(eq_bals), min(mll_vals)) - pad
+            y_max  = max(max(eq_bals), start_bal + profit_tgt) + pad
+
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=dates, y=mll_vals,
-                line=dict(color="rgba(255,68,68,0.55)", width=1.5, dash="dash"),
-                mode="lines", name="MLL (trail)", showlegend=True))
-            fig.add_trace(go.Scatter(x=dates, y=tgt_line, line=dict(color="rgba(0,230,118,0.4)",
-                width=1, dash="dash"), mode="lines", name="Target", showlegend=True))
-            fig.add_trace(go.Scatter(x=dates, y=bals, line=dict(color="#f0b429", width=2),
-                mode="lines+markers", marker=dict(size=4, color="#f0b429"),
-                fill="tozeroy", fillcolor="rgba(240,180,41,0.05)", name="Balance"))
+            # Invisible floor for fill reference
+            fig.add_trace(go.Scatter(
+                x=eq_dates, y=[y_min] * len(eq_dates),
+                mode="lines", line=dict(width=0),
+                showlegend=False, hoverinfo="skip"))
+            # Equity fill (subtle)
+            fig.add_trace(go.Scatter(
+                x=eq_dates, y=eq_bals,
+                mode="lines", line=dict(width=0),
+                fill="tonexty", fillcolor="rgba(240,180,41,0.07)",
+                showlegend=False, hoverinfo="skip"))
+            # MLL line
+            fig.add_trace(go.Scatter(
+                x=eq_dates, y=mll_vals,
+                line=dict(color="rgba(255,68,68,0.65)", width=1.5, dash="dash"),
+                mode="lines", name="MLL", showlegend=True))
+            # Target line
+            fig.add_trace(go.Scatter(
+                x=eq_dates, y=tgt_line,
+                line=dict(color="rgba(0,230,118,0.5)", width=1, dash="dash"),
+                mode="lines", name="Target", showlegend=True))
+            # Equity line
+            fig.add_trace(go.Scatter(
+                x=eq_dates, y=eq_bals,
+                line=dict(color="#f0b429", width=2.5),
+                mode="lines+markers",
+                marker=dict(size=5, color="#f0b429", line=dict(color="#08080f", width=1)),
+                name="Balance", showlegend=True,
+                hovertemplate="<b>%{x}</b><br>$%{y:,.2f}<extra></extra>"))
 
             fig.update_layout(**_layout(
-                yaxis=_AX_DOLLAR,
-                legend=dict(orientation="h", x=0, y=1.12, font=dict(size=10, color="#8888aa"),
-                            bgcolor="rgba(0,0,0,0)")),
-                height=220, margin=dict(l=8,r=8,t=8,b=8))
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False},
-                            key="ov_equity")
+                yaxis=dict(**_AX_DOLLAR, range=[y_min, y_max]),
+                legend=dict(orientation="h", x=0, y=1.12,
+                            font=dict(size=10, color="#8888aa"), bgcolor="rgba(0,0,0,0)")),
+                height=220, margin=dict(l=8, r=8, t=8, b=8))
+            st.plotly_chart(fig, use_container_width=True,
+                            config={"displayModeBar": False}, key="ov_equity")
         else:
             _empty(220, "ov_equity_empty")
 
