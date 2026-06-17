@@ -36,8 +36,19 @@ def _load_eval_config() -> dict:
 
 
 def _load_accounts() -> list:
+    if "accounts_json_override" in st.session_state:
+        return st.session_state["accounts_json_override"]
     p = ROOT / "config" / "accounts.json"
-    return json.loads(p.read_text()).get("accounts", []) if p.exists() else []
+    if p.exists():
+        return json.loads(p.read_text()).get("accounts", [])
+    try:
+        raw = st.secrets.get("ACCOUNTS_JSON", "")
+        if raw:
+            data = json.loads(raw)
+            return data if isinstance(data, list) else data.get("accounts", [])
+    except Exception:
+        pass
+    return []
 
 
 def _kpi(label, value, sub="", color="#f0f0f8", accent="#f0b429", border_color="#1a1a2e"):
