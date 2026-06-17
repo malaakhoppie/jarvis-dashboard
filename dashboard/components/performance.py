@@ -23,7 +23,7 @@ def _k(s): _n[0] += 1; return f"p_{s}_{_n[0]}"
 def _empty(msg, key):
     fig = go.Figure()
     fig.add_annotation(text=msg, x=0.5, y=0.5, xref="paper", yref="paper",
-                       showarrow=False, font=dict(color="#252548", size=12))
+                       showarrow=False, font=dict(color="#7777aa", size=12))
     fig.update_layout(**_C(), height=250, margin=_M)
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=key)
 
@@ -65,24 +65,39 @@ def render_performance():
 
     # ── Equity curve ──────────────────────────────────────────────────────────
     st.markdown("#### Cumulative PnL")
+    # Build from summaries if available, otherwise from per-trade PnL
     if summaries:
         ss = sorted(summaries, key=lambda x: x.get("date") or "")
         dates, cum, running = [], [], 0
         for s in ss:
             running += s.get("pnl", 0) or 0
-            dates.append(s.get("date", ""))
+            dates.append(s.get("date", "")[:10])
             cum.append(running)
+    elif trades:
+        day_pnl: dict[str, float] = {}
+        for t in trades:
+            d = str(t.get("date", ""))[:10]
+            if d:
+                day_pnl[d] = day_pnl.get(d, 0) + (t.get("pnl", 0) or 0)
+        dates, cum, running = [], [], 0
+        for d in sorted(day_pnl.keys()):
+            running += day_pnl[d]
+            dates.append(d)
+            cum.append(running)
+    else:
+        dates, cum = [], []
 
+    if dates:
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=dates, y=cum, mode="lines+markers",
             line=dict(color="#f0b429", width=2),
             marker=dict(size=4, color="#f0b429"),
             fill="tozeroy", fillcolor="rgba(240,180,41,0.06)", name="PnL"))
-        fig.add_hline(y=0, line_dash="dash", line_color="#252548", line_width=1)
+        fig.add_hline(y=0, line_dash="dash", line_color="#333355", line_width=1)
         fig.update_layout(**_C(yaxis=_AX_USD), height=270, margin=_M)
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=_k("curve"))
     else:
-        _empty("No daily summaries yet", _k("curve_e"))
+        _empty("No trade data yet", _k("curve_e"))
 
     r1l, r1r = st.columns(2)
 
@@ -91,11 +106,27 @@ def render_performance():
         st.markdown("#### Daily Win Rate")
         if summaries:
             ss = sorted(summaries, key=lambda x: x.get("date") or "")
-            dlabels = [s.get("date", "")[-5:] for s in ss]
+            dlabels = [str(s.get("date", ""))[:10][-5:] for s in ss]
             wrs     = [s.get("win_rate", 0) or 0 for s in ss]
-            colors  = ["#00e676" if w >= 50 else "#ff4444" for w in wrs]
+        elif trades:
+            dw: dict[str, list] = {}
+            for t in trades:
+                d = str(t.get("date", ""))[:10]
+                if d:
+                    dw.setdefault(d, []).append(t.get("result", ""))
+            dlabels = sorted(dw.keys())
+            wrs = [
+                sum(1 for r in dw[d] if r == "Win") / len(dw[d]) * 100 if dw[d] else 0
+                for d in dlabels
+            ]
+            dlabels = [d[-5:] for d in dlabels]
+        else:
+            dlabels, wrs = [], []
+
+        if dlabels:
+            colors = ["#00e676" if w >= 50 else "#ff4444" for w in wrs]
             fig = go.Figure(go.Bar(x=dlabels, y=wrs, marker_color=colors, marker_line_width=0))
-            fig.add_hline(y=50, line_dash="dash", line_color="#252548", line_width=1)
+            fig.add_hline(y=50, line_dash="dash", line_color="#333355", line_width=1)
             fig.update_layout(**_C(yaxis=dict(**_AX, range=[0, 100])), height=240, margin=_M)
             st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=_k("wr"))
         else:

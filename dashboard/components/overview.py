@@ -356,8 +356,9 @@ def render_overview():
             ))
             fig.update_layout(**_layout(
                 yaxis=dict(**_AX_DOLLAR, range=[min(all_v) - y_pad, max(all_v) + y_pad]),
-                xaxis_rangeslider_visible=False, showlegend=False),
-                height=220, margin=dict(l=8, r=8, t=8, b=8))
+                xaxis=dict(**_AX, rangeslider=dict(visible=False)),
+                showlegend=False),
+                height=270, margin=dict(l=8, r=8, t=8, b=8))
             st.plotly_chart(fig, use_container_width=True,
                             config={"displayModeBar": False}, key="ov_7day")
         else:

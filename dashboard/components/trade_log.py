@@ -10,25 +10,72 @@ ROOT = Path(__file__).parent.parent.parent
 
 
 def _auto_update_balance(net_pnl: float, account_id: str | None = None):
-    """Update accounts.json current_balance. Targets account_id if given, else first active account."""
-    try:
-        path = ROOT / "config" / "accounts.json"
-        data = json.loads(path.read_text())
-        changed = False
-        for acct in data.get("accounts", []):
+    """Update current_balance in accounts.json and/or session_state."""
+    changed = False
+
+    def _apply(accts: list) -> bool:
+        for acct in accts:
             match = (account_id and acct.get("id") == account_id) or (not account_id and acct.get("status") == "active")
             if match:
-                old_bal = acct.get("current_balance", acct.get("starting_balance", 0))
-                new_bal = old_bal + net_pnl
-                acct["current_balance"] = round(new_bal, 2)
-                acct["highest_balance"] = round(max(new_bal, acct.get("highest_balance", new_bal)), 2)
-                changed = True
-                break
-        if changed:
-            path.write_text(json.dumps(data, indent=2))
-        return changed
-    except Exception:
+                old = acct.get("current_balance", acct.get("starting_balance", 0))
+                new = old + net_pnl
+                acct["current_balance"] = round(new, 2)
+                acct["highest_balance"] = round(max(new, acct.get("highest_balance", new)), 2)
+                return True
         return False
+
+    # Local file
+    try:
+        path = ROOT / "config" / "accounts.json"
+        if path.exists():
+            data = json.loads(path.read_text())
+            if _apply(data.get("accounts", [])):
+                path.write_text(json.dumps(data, indent=2))
+                changed = True
+    except Exception:
+        pass
+
+    # Cloud session_state
+    if "accounts_json_override" in st.session_state:
+        accts = st.session_state["accounts_json_override"]
+        if _apply(accts):
+            st.session_state["accounts_json_override"] = accts
+            changed = True
+
+    return changed
+
+
+def _push_daily_summaries(trades: list[dict], pnl_fn) -> tuple[int, int]:
+    """Create a daily summary in Airtable for each day in the imported trade list."""
+    from utils.airtable_client import create_daily_summary
+    day_map: dict[str, list] = {}
+    for t in trades:
+        d = str(t.get("date", ""))[:10]
+        if d:
+            day_map.setdefault(d, []).append(t)
+    saved = failed = 0
+    for d, day_trades in day_map.items():
+        pnls  = [pnl_fn(t) for t in day_trades]
+        total = round(sum(pnls), 2)
+        wins  = sum(1 for p in pnls if p > 0)
+        losses= sum(1 for p in pnls if p < 0)
+        n     = len(pnls)
+        wr    = round(wins / n * 100, 1) if n else 0
+        fields = {
+            "Date":          d + "T00:00:00.000Z",
+            "Total PnL ($)": total,
+            "Trades Taken":  n,
+            "Wins":          wins,
+            "Losses":        losses,
+            "Win Rate (%)":  wr,
+            "DDL Hit":       False,
+            "Closed at DDL": False,
+        }
+        if create_daily_summary(fields):
+            saved += 1
+        else:
+            failed += 1
+    return saved, failed
 
 
 def _load_accounts() -> list[dict]:
@@ -433,9 +480,15 @@ def _render_csv_import():
             prog.progress((i + 1) / len(to_import))
 
         if saved:
-            st.success(f"Imported {saved} trade(s) with net PnL to Airtable.")
+            st.success(f"Imported {saved} trade(s) to Airtable.")
             if _auto_update_balance(net_total, selected_acct_id):
-                st.info(f"Account balance updated → {'+' if net_total >= 0 else ''}${net_total:,.2f} applied.")
+                st.info(f"Balance updated: {'+' if net_total >= 0 else ''}${net_total:,.2f} applied.")
+            ds_saved, ds_failed = _push_daily_summaries(to_import, _net_pnl)
+            if ds_saved:
+                st.info(f"Daily summary created for {ds_saved} trading day(s) — Overview will now reflect today's stats.")
+            elif ds_failed:
+                st.warning("Trades imported but daily summary failed — Overview metrics may show incomplete data.")
+            st.rerun()
         if failed:
             err = get_last_post_error()
             detail = f" — {err}" if err else " — check Settings → Airtable Tables for connection details."
