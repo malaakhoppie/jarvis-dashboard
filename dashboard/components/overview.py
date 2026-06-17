@@ -57,11 +57,11 @@ def _kpi(label, value, sub="", color="#f0f0f8", accent="#f0b429", border_color="
                 padding:1rem 1.1rem;position:relative;overflow:hidden;height:100%'>
       <div style='position:absolute;top:0;left:0;width:3px;bottom:0;
                   background:{accent};opacity:0.7;border-radius:2px 0 0 2px'></div>
-      <div style='color:#6666aa;font-size:0.62rem;text-transform:uppercase;
+      <div style='color:#9999cc;font-size:0.62rem;text-transform:uppercase;
                   letter-spacing:0.13em;margin-bottom:0.4rem;padding-left:0.2rem'>{label}</div>
       <div style='color:{color};font-size:1.45rem;font-weight:700;
                   font-family:JetBrains Mono,monospace;line-height:1;padding-left:0.2rem'>{value}</div>
-      <div style='color:#8888aa;font-size:0.72rem;margin-top:0.28rem;padding-left:0.2rem'>{sub}</div>
+      <div style='color:#b0b0c8;font-size:0.72rem;margin-top:0.28rem;padding-left:0.2rem'>{sub}</div>
     </div>"""
 
 
@@ -103,10 +103,13 @@ def render_overview():
 
     gained      = curr_bal - start_bal
     tgt_pct     = (gained / profit_tgt * 100) if profit_tgt else 0
-    days_on     = 0
-    if cfg.get("first_trade_date"):
+    days_on = 0
+    # Prefer active account's first_trade_date — stays correct when eval_config is stale
+    _active_acct = next((a for a in accounts if a.get("status") == "active"), None)
+    _ftd = ((_active_acct or {}).get("first_trade_date")) or cfg.get("first_trade_date")
+    if _ftd:
         try:
-            days_on = (date.today() - date.fromisoformat(cfg["first_trade_date"])).days + 1
+            days_on = (date.today() - date.fromisoformat(_ftd)).days + 1
         except Exception:
             pass
 
@@ -128,7 +131,7 @@ def render_overview():
     # ── Page title ────────────────────────────────────────────────────────────
     st.markdown("""<div style='margin-bottom:1.2rem;display:flex;align-items:baseline;gap:0.8rem'>
       <span style='color:#f0f0f8;font-size:1.3rem;font-weight:700;letter-spacing:-0.02em'>Overview</span>
-      <span style='color:#252548;font-size:0.72rem;letter-spacing:0.1em;text-transform:uppercase'>live</span>
+      <span style='color:#555577;font-size:0.72rem;letter-spacing:0.1em;text-transform:uppercase'>live</span>
     </div>""", unsafe_allow_html=True)
 
     # ── KPI strip ─────────────────────────────────────────────────────────────
@@ -148,14 +151,14 @@ def render_overview():
         f"padding:1rem 1.1rem;position:relative;overflow:hidden'>"
         f"<div style='position:absolute;top:0;left:0;width:3px;bottom:0;"
         f"background:#f0b429;opacity:0.7;border-radius:2px 0 0 2px'></div>"
-        f"<div style='color:#6666aa;font-size:0.62rem;text-transform:uppercase;"
+        f"<div style='color:#9999cc;font-size:0.62rem;text-transform:uppercase;"
         f"letter-spacing:0.13em;margin-bottom:0.4rem;padding-left:0.2rem'>Progress</div>"
         f"<div style='color:#f0f0f8;font-size:1.45rem;font-weight:700;"
         f"font-family:JetBrains Mono,monospace;line-height:1;padding-left:0.2rem'>{tgt_pct:.0f}%</div>"
         f"<div style='background:#13132a;border-radius:999px;height:4px;margin:0.5rem 0.2rem 0.3rem'>"
         f"<div style='background:linear-gradient(90deg,{b_col}88,{b_col});width:{bar_c:.0f}%;"
         f"height:4px;border-radius:999px'></div></div>"
-        f"<div style='color:#8888aa;font-size:0.72rem;padding-left:0.2rem'>${profit_tgt-gained:,.0f} remaining</div>"
+        f"<div style='color:#b0b0c8;font-size:0.72rem;padding-left:0.2rem'>${profit_tgt-gained:,.0f} remaining</div>"
         f"</div>"
     )
 
@@ -186,36 +189,34 @@ def render_overview():
     ca, cb = st.columns([3, 2])
 
     with ca:
-        st.markdown("<div style='color:#6666aa;font-size:0.62rem;text-transform:uppercase;"
+        st.markdown("<div style='color:#9999cc;font-size:0.62rem;text-transform:uppercase;"
                     "letter-spacing:0.13em;margin-bottom:0.5rem'>Equity Curve</div>",
                     unsafe_allow_html=True)
 
-        # Always start curve from eval start date at starting balance
-        ec_start = cfg.get("start_date") or cfg.get("first_trade_date") or str(date.today())
+        # Start from first trade date at starting balance
+        ec_start = _ftd or cfg.get("start_date") or str(date.today())
         eq_map: dict[str, float] = {ec_start: start_bal}
 
-        if summaries:
+        if summaries or trades:
             ss = sorted(summaries, key=lambda x: x.get("date") or "")
-            # Use eval_balance directly when available (actual balance), else accumulate PnL
-            has_bal = any(s.get("eval_balance") for s in ss)
-            running = start_bal
-            for s in ss:
-                d = s.get("date", "")
-                if not d:
-                    continue
-                if has_bal:
-                    b = s.get("eval_balance") or 0
-                    if b > 0:
-                        eq_map[d] = b
-                else:
-                    running += s.get("pnl", 0) or 0
-                    eq_map[d] = running
-        elif trades:
-            ts = sorted(trades, key=lambda x: str(x.get("date") or ""))
-            running = start_bal
-            for t in ts:
+            summary_day: dict[str, dict] = {s.get("date", ""): s for s in ss}
+            trade_day_pnl: dict[str, float] = {}
+            for t in trades:
                 d = str(t.get("date", ""))[:10]
-                running += t.get("pnl", 0) or 0
+                trade_day_pnl[d] = trade_day_pnl.get(d, 0) + (t.get("pnl", 0) or 0)
+            all_eq_days = sorted(set(
+                [s.get("date", "") for s in ss if s.get("date")] + list(trade_day_pnl.keys())
+            ))
+            running = start_bal
+            for d in all_eq_days:
+                if not d or d == ec_start:
+                    continue
+                s        = summary_day.get(d, {})
+                eval_bal = s.get("eval_balance") or 0
+                if eval_bal > 0:
+                    running = eval_bal  # anchor to real balance when available
+                else:
+                    running += trade_day_pnl.get(d, s.get("pnl", 0) or 0)
                 eq_map[d] = running
 
         eq_entries = sorted(eq_map.items())
@@ -277,34 +278,62 @@ def render_overview():
             _empty(220, "ov_equity_empty")
 
     with cb:
-        st.markdown("<div style='color:#6666aa;font-size:0.62rem;text-transform:uppercase;"
-                    "letter-spacing:0.13em;margin-bottom:0.5rem'>7-Day P&L</div>",
+        st.markdown("<div style='color:#9999cc;font-size:0.62rem;text-transform:uppercase;"
+                    "letter-spacing:0.13em;margin-bottom:0.5rem'>Daily Balance (OHLC)</div>",
                     unsafe_allow_html=True)
-        if summaries:
-            week = sorted(summaries[:7], key=lambda x: x.get("date") or "")
-            dlabels = [s.get("date","")[-5:] for s in week]
-            dpnls   = [s.get("pnl",0) or 0 for s in week]
-        elif trades:
-            day_pnl: dict[str, float] = {}
-            for t in sorted(trades, key=lambda x: str(x.get("date") or ""))[-7:]:
-                d = str(t.get("date",""))[:10][-5:]
-                day_pnl[d] = day_pnl.get(d, 0) + (t.get("pnl",0) or 0)
-            dlabels = list(day_pnl.keys())
-            dpnls   = list(day_pnl.values())
-        else:
-            dlabels, dpnls = [], []
+        # Build per-day OHLC from trades
+        td_pnls: dict[str, list[float]] = {}
+        for t in trades:
+            d = str(t.get("date", ""))[:10]
+            if d:
+                td_pnls.setdefault(d, []).append(t.get("pnl", 0) or 0)
 
-        if dlabels:
-            dcolors = ["#00e676" if p >= 0 else "#ff4444" for p in dpnls]
-            fig = go.Figure(go.Bar(x=dlabels, y=dpnls, marker_color=dcolors,
-                marker_line_width=0, width=0.55,
-                text=[f"${p:+,.0f}" for p in dpnls], textposition="outside",
-                textfont=dict(size=9, color="#8888aa")))
-            fig.add_hline(y=0, line_color="#252548", line_width=1)
-            fig.update_layout(**_layout(yaxis=_AX_DOLLAR, bargap=0.3, showlegend=False),
-                height=220, margin=dict(l=8,r=8,t=8,b=8))
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False},
-                            key="ov_7day")
+        if td_pnls:
+            smry_cb = {s.get("date", ""): (s.get("eval_balance") or 0) for s in summaries}
+            all_td  = sorted(td_pnls.keys())
+            d_open: dict[str, float] = {}
+            d_close: dict[str, float] = {}
+            run_cb = start_bal
+            for d in all_td:
+                d_open[d] = run_cb
+                for p in td_pnls[d]:
+                    run_cb += p
+                if smry_cb.get(d, 0) > 0:
+                    run_cb = smry_cb[d]
+                d_close[d] = run_cb
+
+            last7  = all_td[-7:]
+            oc_x, oc_o, oc_h, oc_l, oc_c = [], [], [], [], []
+            for d in last7:
+                o = d_open[d]
+                c = d_close[d]
+                intra = [o]
+                r = o
+                for p in td_pnls[d]:
+                    r += p
+                    intra.append(r)
+                oc_x.append(d[-5:])
+                oc_o.append(o)
+                oc_h.append(max(intra))
+                oc_l.append(min(intra))
+                oc_c.append(c)
+
+            all_v = oc_o + oc_h + oc_l + oc_c
+            y_pad = max((max(all_v) - min(all_v)) * 0.3, 40)
+
+            fig = go.Figure(go.Candlestick(
+                x=oc_x, open=oc_o, high=oc_h, low=oc_l, close=oc_c,
+                increasing_line_color="#00e676",
+                increasing_fillcolor="rgba(0,230,118,0.25)",
+                decreasing_line_color="#ff4444",
+                decreasing_fillcolor="rgba(255,68,68,0.25)",
+            ))
+            fig.update_layout(**_layout(
+                yaxis=dict(**_AX_DOLLAR, range=[min(all_v) - y_pad, max(all_v) + y_pad]),
+                xaxis_rangeslider_visible=False, showlegend=False),
+                height=220, margin=dict(l=8, r=8, t=8, b=8))
+            st.plotly_chart(fig, use_container_width=True,
+                            config={"displayModeBar": False}, key="ov_7day")
         else:
             _empty(220, "ov_7day_empty")
 
@@ -331,7 +360,7 @@ def render_overview():
         f"{wr_v:.0f}<span style='font-size:1rem;opacity:0.7'>%</span></div>"
         f"<div style='background:#13132a;border-radius:999px;height:4px;margin:0.5rem 0 0.3rem'>"
         f"<div style='background:{wr_col};width:{min(wr_v,100):.0f}%;height:4px;border-radius:999px'></div></div>"
-        f"<div style='color:#6666aa;font-size:0.7rem'>{len(trades)} trades · {len(wins_all)}W / {len(loss_all)}L</div>"
+        f"<div style='color:#9999cc;font-size:0.7rem'>{len(trades)} trades · {len(wins_all)}W / {len(loss_all)}L</div>"
         f"</div>"
         f"<div style='background:#09090f;border:1px solid #1a1a2e;border-radius:12px;padding:1.1rem 1.2rem'>"
         f"<div style='color:#00d4ff;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.12em;"
@@ -340,7 +369,7 @@ def render_overview():
         f"{rr_v:.2f}<span style='font-size:1rem;opacity:0.7'>R</span></div>"
         f"<div style='background:#13132a;border-radius:999px;height:4px;margin:0.5rem 0 0.3rem'>"
         f"<div style='background:{rr_col};width:{min(rr_v/5*100,100):.0f}%;height:4px;border-radius:999px'></div></div>"
-        f"<div style='color:#6666aa;font-size:0.7rem'>target 2.0R+ · avg win ${avg_win:,.0f}</div>"
+        f"<div style='color:#9999cc;font-size:0.7rem'>target 2.0R+ · avg win ${avg_win:,.0f}</div>"
         f"</div>"
         f"<div style='background:#09090f;border:1px solid #1a1a2e;border-radius:12px;padding:1.1rem 1.2rem'>"
         f"<div style='color:#a78bfa;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.12em;"
@@ -349,7 +378,7 @@ def render_overview():
         f"{avg_rule:.1f}<span style='font-size:1rem;opacity:0.7'>/8</span></div>"
         f"<div style='background:#13132a;border-radius:999px;height:4px;margin:0.5rem 0 0.3rem'>"
         f"<div style='background:{rule_col};width:{avg_rule/8*100:.0f}%;height:4px;border-radius:999px'></div></div>"
-        f"<div style='color:#6666aa;font-size:0.7rem'>follow the process — target 6/8+</div>"
+        f"<div style='color:#9999cc;font-size:0.7rem'>follow the process — target 6/8+</div>"
         f"</div>"
         f"</div>",
         unsafe_allow_html=True,
@@ -361,7 +390,7 @@ def render_overview():
     bot_l, bot_r = st.columns([2, 3])
 
     with bot_l:
-        st.markdown("<div style='color:#6666aa;font-size:0.62rem;text-transform:uppercase;"
+        st.markdown("<div style='color:#9999cc;font-size:0.62rem;text-transform:uppercase;"
                     "letter-spacing:0.13em;margin-bottom:0.6rem'>Pattern Flags</div>",
                     unsafe_allow_html=True)
         if flags:
@@ -373,7 +402,7 @@ def render_overview():
                     f"border-radius:0 8px 8px 0;padding:0.5rem 0.8rem;margin-bottom:0.35rem'>"
                     f"<div style='color:#f0f0f8;font-size:0.8rem;font-weight:600'>"
                     f"{f.get('pattern',f.get('flag','—'))}</div>"
-                    f"<div style='color:#8888aa;font-size:0.7rem;margin-top:0.1rem'>"
+                    f"<div style='color:#b0b0c8;font-size:0.7rem;margin-top:0.1rem'>"
                     f"{f.get('occurrences',0)}×  ·  {sev}  ·  {f.get('note','')}</div>"
                     f"</div>", unsafe_allow_html=True)
         else:
@@ -382,7 +411,7 @@ def render_overview():
                         unsafe_allow_html=True)
 
     with bot_r:
-        st.markdown("<div style='color:#6666aa;font-size:0.62rem;text-transform:uppercase;"
+        st.markdown("<div style='color:#9999cc;font-size:0.62rem;text-transform:uppercase;"
                     "letter-spacing:0.13em;margin-bottom:0.6rem'>7-Day Summary</div>",
                     unsafe_allow_html=True)
         _7day_table(summaries)
@@ -394,6 +423,38 @@ def render_overview():
 
     # ── Today's Session ───────────────────────────────────────────────────────
     _render_session_trades(trades)
+
+    # ── Full Trade History ────────────────────────────────────────────────────
+    st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
+    with st.expander("Trade History — All Entries", expanded=False):
+        all_hist = get_trades(365)
+        if not all_hist:
+            st.markdown("<div style='color:#b0b0c8;font-size:0.85rem;padding:0.5rem'>"
+                        "No trades found.</div>", unsafe_allow_html=True)
+        else:
+            import pandas as pd
+            rows = []
+            for t in sorted(all_hist, key=lambda x: str(x.get("date") or ""), reverse=True):
+                pnl = t.get("pnl", 0) or 0
+                rows.append({
+                    "Date":    str(t.get("date", ""))[:10],
+                    "Symbol":  t.get("symbol", "—") or "—",
+                    "Dir":     (t.get("direction", "—") or "—")[:1].upper(),
+                    "PnL":     round(pnl, 2),
+                    "Result":  t.get("result", "—") or "—",
+                    "Rules":   t.get("rule_score"),
+                    "Session": t.get("session", "—") or "—",
+                    "Notes":   (t.get("notes", "") or "")[:60],
+                })
+            st.dataframe(
+                pd.DataFrame(rows),
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "PnL":   st.column_config.NumberColumn("PnL ($)", format="$%.2f"),
+                    "Rules": st.column_config.NumberColumn("Rules /8"),
+                },
+            )
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -446,28 +507,28 @@ def _render_week_strip(trades, summaries, start_bal, ddl, today_pnl, ddl_hit):
     st.markdown(
         f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:0.6rem;align-items:stretch'>"
         f"<div style='background:#09090f;border:1px solid #1a1a2e;border-radius:10px;padding:0.7rem 0.9rem'>"
-        f"<div style='color:#6666aa;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.25rem'>This Week</div>"
+        f"<div style='color:#9999cc;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.25rem'>This Week</div>"
         f"<div style='color:{week_col};font-size:1.1rem;font-weight:700;font-family:JetBrains Mono,monospace'>{'+' if week_pnl>=0 else ''}${week_pnl:,.2f}</div>"
-        f"<div style='color:#8888aa;font-size:0.7rem'>{week_wins}W/{week_losses}L · {week_wr:.0f}% WR</div>"
+        f"<div style='color:#b0b0c8;font-size:0.7rem'>{week_wins}W/{week_losses}L · {week_wr:.0f}% WR</div>"
         f"</div>"
         f"<div style='background:#09090f;border:1px solid #1a1a2e;border-radius:10px;padding:0.7rem 0.9rem'>"
-        f"<div style='color:#6666aa;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.25rem'>Best Day</div>"
+        f"<div style='color:#9999cc;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.25rem'>Best Day</div>"
         f"<div style='color:{best_col};font-size:1.1rem;font-weight:700;font-family:JetBrains Mono,monospace'>{'+' if best_day>=0 else ''}${best_day:,.2f}</div>"
-        f"<div style='color:#8888aa;font-size:0.7rem'>this week</div>"
+        f"<div style='color:#b0b0c8;font-size:0.7rem'>this week</div>"
         f"</div>"
         f"<div style='background:#09090f;border:1px solid #1a1a2e;border-radius:10px;padding:0.7rem 0.9rem'>"
-        f"<div style='color:#6666aa;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.25rem'>Worst Day</div>"
+        f"<div style='color:#9999cc;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.25rem'>Worst Day</div>"
         f"<div style='color:{worst_col};font-size:1.1rem;font-weight:700;font-family:JetBrains Mono,monospace'>{'+' if worst_day>=0 else ''}${worst_day:,.2f}</div>"
-        f"<div style='color:#8888aa;font-size:0.7rem'>this week</div>"
+        f"<div style='color:#b0b0c8;font-size:0.7rem'>this week</div>"
         f"</div>"
         f"<div style='background:#09090f;border:1px solid #1a1a2e;border-radius:10px;padding:0.7rem 0.9rem'>"
-        f"<div style='color:#6666aa;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.25rem'>Streak</div>"
+        f"<div style='color:#9999cc;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.25rem'>Streak</div>"
         f"<div style='color:{streak_col};font-size:1.6rem;font-weight:700;font-family:JetBrains Mono,monospace;line-height:1'>{streak_lbl}</div>"
-        f"<div style='color:#8888aa;font-size:0.7rem'>current run</div>"
+        f"<div style='color:#b0b0c8;font-size:0.7rem'>current run</div>"
         f"</div>"
         f"<div style='background:{'#120808' if ddl_hit else '#09090f'};border:1px solid {'#ff444444' if ddl_hit else '#1a1a2e'};border-radius:10px;padding:0.7rem 0.9rem'>"
         f"<div style='display:flex;justify-content:space-between;margin-bottom:0.25rem'>"
-        f"<span style='color:#6666aa;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.1em'>DDL Usage</span>"
+        f"<span style='color:#9999cc;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.1em'>DDL Usage</span>"
         f"<span style='color:{ddl_bar_col};font-size:0.6rem;font-weight:700'>{'BREACHED' if ddl_hit else f'${loss_today:,.2f} / ${ddl:,.0f}'}</span>"
         f"</div>"
         f"<div style='background:#13132a;border-radius:999px;height:8px;margin-bottom:0.3rem;overflow:hidden'>"
@@ -475,7 +536,7 @@ def _render_week_strip(trades, summaries, start_bal, ddl, today_pnl, ddl_hit):
         f"width:{ddl_pct:.1f}%;height:8px;border-radius:999px;"
         f"{'animation:ddlpulse 1s infinite' if ddl_hit else ''}'></div>"
         f"</div>"
-        f"<div style='color:#8888aa;font-size:0.7rem'>{'🛑 CLOSE THE LAPTOP — DDL HIT' if ddl_hit else f'{100-ddl_pct:.0f}% remaining · ${ddl - loss_today:,.2f} left'}</div>"
+        f"<div style='color:#b0b0c8;font-size:0.7rem'>{'🛑 CLOSE THE LAPTOP — DDL HIT' if ddl_hit else f'{100-ddl_pct:.0f}% remaining · ${ddl - loss_today:,.2f} left'}</div>"
         f"</div>"
         f"</div>",
         unsafe_allow_html=True,
@@ -520,7 +581,36 @@ def _render_session_clock_mini():
             f"</div>"
         )
     st.markdown(
-        f"<div style='display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem'>{pills}</div>",
+        f"<div style='display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.4rem'>{pills}</div>",
+        unsafe_allow_html=True,
+    )
+    # ── Kill zones ────────────────────────────────────────────────────────────
+    KZ_OV = [
+        ("London KZ",  2,  0,  5,  0, "#00d4ff"),
+        ("NY KZ",      7,  0, 12,  0, "#00e676"),
+        ("PM NY KZ",  15,  0, 16, 30, "#f0b429"),
+    ]
+    kz_pills = ""
+    for kz_name, sh, sm, eh, em, kz_color in KZ_OV:
+        is_kz  = sh * 60 + sm <= cur < eh * 60 + em
+        bg     = f"{kz_color}22" if is_kz else "#09090f"
+        border = f"1px solid {kz_color}" if is_kz else "1px solid #1a1a2e"
+        dot    = (
+            f"<span style='display:inline-block;width:5px;height:5px;border-radius:50%;"
+            f"background:{kz_color};margin-right:0.3rem;vertical-align:middle;"
+            f"animation:pulse 2s infinite'></span>"
+        ) if is_kz else ""
+        kz_pills += (
+            f"<div style='background:{bg};border:{border};border-radius:6px;"
+            f"padding:0.3rem 0.7rem;text-align:center;flex:1;min-width:80px'>"
+            f"<div style='color:{kz_color};font-size:0.6rem;font-weight:700;"
+            f"letter-spacing:0.07em;text-transform:uppercase'>{dot}{kz_name}</div>"
+            f"<div style='color:{kz_color}88;font-size:0.6rem;"
+            f"font-family:JetBrains Mono,monospace'>{sh:02d}:{sm:02d}–{eh:02d}:{em:02d} ET</div>"
+            f"</div>"
+        )
+    st.markdown(
+        f"<div style='display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.8rem'>{kz_pills}</div>",
         unsafe_allow_html=True,
     )
 
@@ -559,13 +649,13 @@ def _render_session_trades(trades: list[dict]):
             f"background:{kz_color};margin-right:0.5rem;vertical-align:middle;"
             f"animation:pulse 2s infinite'></span>"
             f"<span style='color:{kz_color};font-weight:700;letter-spacing:0.08em'>{kz_name.upper()}</span>"
-            f"<span style='color:#8888aa;margin-left:0.6rem;font-size:0.68rem'>{time_left}</span>"
+            f"<span style='color:#b0b0c8;margin-left:0.6rem;font-size:0.68rem'>{time_left}</span>"
         )
     else:
         status_html = (
             "<span style='display:inline-block;width:7px;height:7px;border-radius:50%;"
             "background:#252548;margin-right:0.5rem;vertical-align:middle'></span>"
-            "<span style='color:#6666aa'>BETWEEN SESSIONS</span>"
+            "<span style='color:#9999cc'>BETWEEN SESSIONS</span>"
         )
 
     hc, rc = st.columns([7, 1])
@@ -586,7 +676,7 @@ def _render_session_trades(trades: list[dict]):
             f"<div style='display:flex;gap:1.4rem;align-items:center;margin-bottom:0.5rem'>"
             f"<span style='color:{pnl_col};font-family:JetBrains Mono,monospace;"
             f"font-weight:700;font-size:0.95rem'>{sign}${sess_pnl:,.2f}</span>"
-            f"<span style='color:#8888aa;font-size:0.75rem'>"
+            f"<span style='color:#b0b0c8;font-size:0.75rem'>"
             f"{sess_wins}W / {sess_losses}L · {len(today_trades)} trade{'s' if len(today_trades)!=1 else ''} today</span>"
             f"</div>",
             unsafe_allow_html=True,
@@ -662,10 +752,10 @@ def _7day_table(summaries):
         rows += (
             f"<div style='display:flex;background:{bg};border:1px solid #13132a;"
             f"{bt};padding:0.4rem 0.8rem;{br}'>"
-            f"<span style='color:#6666aa;font-family:JetBrains Mono,monospace;font-size:0.75rem;flex:1.3'>{d}</span>"
+            f"<span style='color:#9999cc;font-family:JetBrains Mono,monospace;font-size:0.75rem;flex:1.3'>{d}</span>"
             f"<span style='color:{pc};font-family:JetBrains Mono,monospace;font-size:0.75rem;font-weight:600;flex:1'>{'+' if p>=0 else ''}${p:,.2f}</span>"
-            f"<span style='color:#6666aa;font-size:0.73rem;flex:0.8'>{w}W/{l}L</span>"
-            f"<span style='color:#6666aa;font-size:0.73rem;flex:0.55'>{wr_d:.0f}%</span>"
+            f"<span style='color:#9999cc;font-size:0.73rem;flex:0.8'>{w}W/{l}L</span>"
+            f"<span style='color:#9999cc;font-size:0.73rem;flex:0.55'>{wr_d:.0f}%</span>"
             f"<span style='color:{gc};font-size:0.73rem;font-weight:700;flex:0.4'>{g}</span>"
             f"<span style='flex:0.3;font-size:0.7rem'>{di}</span>"
             f"</div>"
@@ -715,7 +805,7 @@ def _trades_table(trades):
             bw = int(rule / 8 * 48)
             rbar = (f"<span style='display:inline-block;width:{bw}px;height:2px;background:#f0b429;"
                     f"border-radius:999px;vertical-align:middle;margin-right:4px'></span>"
-                    f"<span style='color:#8888aa;font-size:0.72rem'>{rule}/8</span>")
+                    f"<span style='color:#b0b0c8;font-size:0.72rem'>{rule}/8</span>")
         else:
             rbar = "<span style='color:#252548'>—</span>"
         br = "border-radius:0 0 8px 8px" if i == len(trades)-1 else ""
@@ -724,12 +814,12 @@ def _trades_table(trades):
         rows += (
             f"<div style='display:flex;align-items:center;background:{bg};border:1px solid #13132a;"
             f"{bt};padding:0.45rem 1rem;{br}'>"
-            f"<span style='color:#6666aa;font-family:JetBrains Mono,monospace;font-size:0.75rem;flex:1.2'>{str(t.get('date',''))[:10]}</span>"
+            f"<span style='color:#9999cc;font-family:JetBrains Mono,monospace;font-size:0.75rem;flex:1.2'>{str(t.get('date',''))[:10]}</span>"
             f"<span style='color:#f0f0f8;font-weight:600;font-size:0.82rem;flex:0.7'>{t.get('symbol','—')}</span>"
             f"<span style='color:{dc};font-size:0.75rem;flex:0.6'>{t.get('direction','—')}</span>"
             f"<span style='color:{pc};font-weight:700;font-family:JetBrains Mono,monospace;font-size:0.82rem;flex:1'>{'+' if pnl>=0 else ''}${pnl:,.2f}</span>"
             f"<span style='flex:0.8'>{rbar}</span>"
-            f"<span style='color:#8888aa;font-size:0.75rem;flex:0.7'>{t.get('session','—')}</span>"
+            f"<span style='color:#b0b0c8;font-size:0.75rem;flex:0.7'>{t.get('session','—')}</span>"
             f"<span style='color:{rc};font-size:0.75rem;font-weight:600;flex:0.6'>{res}</span>"
             f"</div>"
         )
