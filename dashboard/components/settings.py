@@ -108,7 +108,7 @@ def render_settings():
     if airtable_key and not airtable_key.startswith("your_"):
         try:
             r = requests.get(
-                f"https://api.airtable.com/v0/meta/bases/{airtable_base}/tables",
+                f"https://api.airtable.com/v0/{airtable_base}/{_CORRECT_TABLE_IDS['trades']}?maxRecords=1",
                 headers={"Authorization": f"Bearer {airtable_key}"},
                 timeout=5,
             )
