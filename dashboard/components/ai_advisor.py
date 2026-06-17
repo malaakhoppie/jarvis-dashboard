@@ -87,19 +87,20 @@ def _generate_coaching_brief(trades_key: str, summaries_key: str, api_key: str) 
         total_pnl  = sum(t.get("pnl",0) or 0 for t in week_trades)
         wins       = sum(1 for t in week_trades if t.get("result")=="Win")
         losses     = sum(1 for t in week_trades if t.get("result")=="Loss")
-        rule_scores = [t["rule_score"] for t in week_trades if t.get("rule_score") is not None]
-        avg_rule   = sum(rule_scores)/len(rule_scores) if rule_scores else None
+        dur_vals   = [t["duration"] for t in week_trades if t.get("duration") is not None]
+        avg_hold   = sum(dur_vals)/len(dur_vals) if dur_vals else None
 
         today_summary = ""
         if today_trades:
             today_pnl = sum(t.get("pnl",0) or 0 for t in today_trades)
             today_summary = f"Today's trades: {len(today_trades)} trades, ${today_pnl:+,.2f} PnL"
             for t in today_trades[:5]:
-                today_summary += f"\n  - {t.get('symbol','?')} {t.get('direction','?')} ${t.get('pnl',0):+,.2f} | Rule: {t.get('rule_score','?')}/8 | {t.get('rule_adherence','?')}"
+                dur = t.get('duration')
+                today_summary += f"\n  - {t.get('symbol','?')} {t.get('direction','?')} ${t.get('pnl',0):+,.2f} | Hold: {dur}m | {t.get('rule_adherence','?')}"
 
         week_summary = (
             f"This week: {wins}W/{losses}L · ${total_pnl:+,.2f} PnL"
-            + (f" · avg rule score {avg_rule:.1f}/8" if avg_rule else "")
+            + (f" · avg hold {avg_hold:.0f}m" if avg_hold else "")
         )
 
         ddl_hits = sum(1 for s in summaries if s.get("ddl_hit"))

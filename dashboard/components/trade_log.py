@@ -170,14 +170,14 @@ def _render_airtable_trades():
         wins = sum(1 for t in filtered if t.get("result") == "Win")
         losses = sum(1 for t in filtered if t.get("result") == "Loss")
         wr = (wins / len(filtered) * 100) if filtered else 0
-        avg_rule = [t["rule_score"] for t in filtered if t.get("rule_score") is not None]
-        avg_rule_score = sum(avg_rule) / len(avg_rule) if avg_rule else 0
+        dur_vals = [t["duration"] for t in filtered if t.get("duration") is not None]
+        avg_hold_min = sum(dur_vals) / len(dur_vals) if dur_vals else 0
 
         sc1, sc2, sc3, sc4 = st.columns(4)
         sc1.metric("Total PnL", f"${total_pnl:,.2f}")
         sc2.metric("Win Rate", f"{wr:.0f}%", f"{wins}W / {losses}L")
         sc3.metric("Trades", len(filtered))
-        sc4.metric("Avg Rule Score", f"{avg_rule_score:.1f}/8" if avg_rule else "—")
+        sc4.metric("Avg Hold Time", f"{avg_hold_min:.0f}m" if dur_vals else "—")
         st.divider()
 
     if filtered:
@@ -187,8 +187,8 @@ def _render_airtable_trades():
             dir_col = "#00d4ff" if t.get("direction") == "Long" else "#f87171"
             adh = t.get("rule_adherence", "")
             adh_col = {"Full": "#00e676", "Partial": "#f59e0b", "None": "#ff4444"}.get(adh, "#8888aa")
-            rule = t.get("rule_score")
-            rule_txt = f"{rule}/8" if rule is not None else "—"
+            dur = t.get("duration")
+            dur_txt = f"{dur}m" if dur is not None else "—"
             ddl = t.get("ddl_status", "")
             ddl_col = "#ff4444" if ddl == "Hit" else "#00e676" if ddl == "Clear" else "#8888aa"
             rec_id = t.get("id", "")
@@ -202,7 +202,7 @@ def _render_airtable_trades():
                     f"<span style='color:#f0f0f8;font-weight:700;min-width:55px'>{t.get('symbol','—')}</span>"
                     f"<span style='background:{dir_col}22;color:{dir_col};padding:1px 8px;border-radius:999px;font-size:0.75rem;min-width:50px;text-align:center'>{t.get('direction','—')}</span>"
                     f"<span style='color:{pnl_col};font-weight:700;font-family:JetBrains Mono,monospace;min-width:80px'>{'+' if pnl >= 0 else ''}${pnl:,.2f}</span>"
-                    f"<span style='color:#9999cc;font-size:0.78rem'>Rule <span style='color:#f0f0f8'>{rule_txt}</span></span>"
+                    f"<span style='color:#9999cc;font-size:0.78rem'>⏱ <span style='color:#f0f0f8'>{dur_txt}</span></span>"
                     f"<span style='color:{adh_col};font-size:0.78rem'>{adh}</span>"
                     f"<span style='color:#9999cc;font-size:0.78rem'>{t.get('session','')}</span>"
                     f"<span style='color:{ddl_col};font-size:0.72rem'>{ddl}</span>"
@@ -295,7 +295,6 @@ def _render_add_form():
             pnl        = st.number_input("PnL ($)", step=0.01)
         with f5:
             duration   = st.number_input("Duration (min)", min_value=0, step=1)
-            rule_score = st.slider("Rule Score (0-8)", 0, 8, 4)
         with f6:
             result         = st.selectbox("Result", ["Win", "Loss", "BE"])
             ddl_status     = st.selectbox("DDL Status", ["No DDL", "DDL Hit - Closed", "DDL Hit - OVERRODE"])
@@ -322,7 +321,7 @@ def _render_add_form():
                 "Duration (min)":     int(duration),
                 "Session":            session,
                 "Setup Tags":         setup_tags,
-                "Rule Score (0-8)":   int(rule_score),
+
                 "DDL Status":         ddl_status,
                 "Rule Adherence":     rule_adherence,
                 "Result":             result,
@@ -497,11 +496,7 @@ def _render_csv_import():
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Import options ────────────────────────────────────────────────────────
-    ic1, ic2 = st.columns(2)
-    with ic1:
-        default_rule = st.slider("Default rule score for all imports", 0, 8, 4, key="import_rule")
-    with ic2:
-        skip_zero = st.checkbox("Skip zero-PnL rows", value=True, key="import_skip_zero")
+    skip_zero = st.checkbox("Skip zero-PnL rows", value=True, key="import_skip_zero")
 
     if st.button("Import to Airtable Log", key="csv_import_btn", use_container_width=True):
         to_import = [t for t in trades if not (skip_zero and abs(_net_pnl(t)) < 0.01)]
@@ -514,7 +509,7 @@ def _render_csv_import():
             fill_with_net["pnl"] = _net_pnl(fill)
             fill_with_net["commission"] = gross_total - net_total if i == 0 else (fill.get("commission") or comm_per_side * (fill.get("qty") or 1) * 2)
             result_str = "Win" if fill_with_net["pnl"] > 0 else ("Loss" if fill_with_net["pnl"] < 0 else "BE")
-            fields = fills_to_airtable_fields(fill_with_net, rule_score=default_rule, result=result_str)
+            fields = fills_to_airtable_fields(fill_with_net, result=result_str)
             if create_trade(fields):
                 saved += 1
             else:

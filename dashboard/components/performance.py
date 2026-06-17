@@ -47,8 +47,8 @@ def render_performance():
     avg_win   = sum(t.get("pnl", 0) or 0 for t in wins) / len(wins) if wins else 0
     avg_loss  = sum(t.get("pnl", 0) or 0 for t in losses) / len(losses) if losses else 0
     rr        = abs(avg_win / avg_loss) if avg_loss else 0
-    rule_sc   = [t["rule_score"] for t in trades if t.get("rule_score") is not None]
-    avg_rule  = sum(rule_sc) / len(rule_sc) if rule_sc else 0
+    dur_sc    = [t["duration"] for t in trades if t.get("duration") is not None]
+    avg_hold  = sum(dur_sc) / len(dur_sc) if dur_sc else 0
     ddl_hits  = sum(1 for s in summaries if s.get("ddl_hit"))
     ddl_closed= sum(1 for s in summaries if s.get("ddl_hit") and s.get("closed_at_ddl"))
 
@@ -59,7 +59,7 @@ def render_performance():
     m3.metric("Avg Win",         f"${avg_win:,.2f}")
     m4.metric("Avg Loss",        f"${avg_loss:,.2f}")
     m5.metric("R:R",             f"{rr:.2f}")
-    m6.metric("Avg Rule Score",  f"{avg_rule:.1f}/8" if rule_sc else "—")
+    m6.metric("Avg Hold Time",   f"{avg_hold:.0f}m" if dur_sc else "—")
 
     st.divider()
 

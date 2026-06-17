@@ -371,12 +371,12 @@ def render_overview():
     avg_win   = sum(t.get("pnl",0) or 0 for t in wins_all)/len(wins_all) if wins_all else 0
     avg_loss  = abs(sum(t.get("pnl",0) or 0 for t in loss_all)/len(loss_all)) if loss_all else 0
     rr_v      = avg_win/avg_loss if avg_loss else 0
-    rule_sc   = [t["rule_score"] for t in trades if t.get("rule_score") is not None]
-    avg_rule  = sum(rule_sc)/len(rule_sc) if rule_sc else 0
+    dur_sc    = [t["duration"] for t in trades if t.get("duration") is not None]
+    avg_hold  = sum(dur_sc)/len(dur_sc) if dur_sc else 0
 
     wr_col   = "#00e676" if wr_v >= 60 else ("#f0b429" if wr_v >= 40 else "#ff4444")
     rr_col   = "#00e676" if rr_v >= 2  else ("#f0b429" if rr_v >= 1  else "#ff4444")
-    rule_col = "#00e676" if avg_rule >= 6 else ("#f0b429" if avg_rule >= 4 else "#ff4444")
+    hold_col = "#00e676" if avg_hold >= 15 else ("#f0b429" if avg_hold >= 5 else "#ff4444")
 
     st.markdown(
         f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0.6rem'>"
@@ -400,12 +400,12 @@ def render_overview():
         f"</div>"
         f"<div style='background:#09090f;border:1px solid #1a1a2e;border-radius:12px;padding:1.1rem 1.2rem'>"
         f"<div style='color:#a78bfa;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.12em;"
-        f"margin-bottom:0.4rem;font-weight:700'>Rules Followed (0–8)</div>"
-        f"<div style='color:{rule_col};font-size:2rem;font-weight:700;font-family:JetBrains Mono,monospace;line-height:1'>"
-        f"{avg_rule:.1f}<span style='font-size:1rem;opacity:0.7'>/8</span></div>"
+        f"margin-bottom:0.4rem;font-weight:700'>Avg Hold Time (30d)</div>"
+        f"<div style='color:{hold_col};font-size:2rem;font-weight:700;font-family:JetBrains Mono,monospace;line-height:1'>"
+        f"{avg_hold:.0f}<span style='font-size:1rem;opacity:0.7'>m</span></div>"
         f"<div style='background:#13132a;border-radius:999px;height:4px;margin:0.5rem 0 0.3rem'>"
-        f"<div style='background:{rule_col};width:{avg_rule/8*100:.0f}%;height:4px;border-radius:999px'></div></div>"
-        f"<div style='color:#9999cc;font-size:0.7rem'>follow the process — target 6/8+</div>"
+        f"<div style='background:{hold_col};width:{min(avg_hold/60*100,100):.0f}%;height:4px;border-radius:999px'></div></div>"
+        f"<div style='color:#9999cc;font-size:0.7rem'>{len(dur_sc)} trades with duration data</div>"
         f"</div>"
         f"</div>",
         unsafe_allow_html=True,
@@ -466,7 +466,7 @@ def render_overview():
                     "Dir":     (t.get("direction", "—") or "—")[:1].upper(),
                     "PnL":     round(pnl, 2),
                     "Result":  t.get("result", "—") or "—",
-                    "Rules":   t.get("rule_score"),
+                    "Hold":    t.get("duration"),
                     "Session": t.get("session", "—") or "—",
                     "Notes":   (t.get("notes", "") or "")[:60],
                 })
@@ -476,7 +476,7 @@ def render_overview():
                 hide_index=True,
                 column_config={
                     "PnL":   st.column_config.NumberColumn("PnL ($)", format="$%.2f"),
-                    "Rules": st.column_config.NumberColumn("Rules /8"),
+                    "Hold":  st.column_config.NumberColumn("Hold (min)"),
                 },
             )
 
@@ -823,15 +823,8 @@ def _trades_table(trades):
         pc    = "#00e676" if pnl >= 0 else "#ff4444"
         dc    = "#00d4ff" if t.get("direction")=="Long" else "#f87171"
         rc    = "#00e676" if res=="Win" else ("#ff4444" if res=="Loss" else "#8888aa")
-        rule  = t.get("rule_score")
-        rbar  = ""
-        if rule is not None:
-            bw = int(rule / 8 * 48)
-            rbar = (f"<span style='display:inline-block;width:{bw}px;height:2px;background:#f0b429;"
-                    f"border-radius:999px;vertical-align:middle;margin-right:4px'></span>"
-                    f"<span style='color:#b0b0c8;font-size:0.72rem'>{rule}/8</span>")
-        else:
-            rbar = "<span style='color:#252548'>—</span>"
+        dur   = t.get("duration")
+        dur_txt = f"{dur}m" if dur is not None else "—"
         br = "border-radius:0 0 8px 8px" if i == len(trades)-1 else ""
         bt = "border-top:none" if i > 0 else ""
         bg = "#0c0c16" if i % 2 == 0 else "#09090f"
@@ -842,7 +835,7 @@ def _trades_table(trades):
             f"<span style='color:#f0f0f8;font-weight:600;font-size:0.82rem;flex:0.7'>{t.get('symbol','—')}</span>"
             f"<span style='color:{dc};font-size:0.75rem;flex:0.6'>{t.get('direction','—')}</span>"
             f"<span style='color:{pc};font-weight:700;font-family:JetBrains Mono,monospace;font-size:0.82rem;flex:1'>{'+' if pnl>=0 else ''}${pnl:,.2f}</span>"
-            f"<span style='flex:0.8'>{rbar}</span>"
+            f"<span style='color:#9999cc;font-size:0.75rem;flex:0.8'>{dur_txt}</span>"
             f"<span style='color:#b0b0c8;font-size:0.75rem;flex:0.7'>{t.get('session','—')}</span>"
             f"<span style='color:{rc};font-size:0.75rem;font-weight:600;flex:0.6'>{res}</span>"
             f"</div>"
